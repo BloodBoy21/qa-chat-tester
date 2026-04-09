@@ -1,7 +1,7 @@
 from .agent_base import AgentBase
 from google.adk.agents import LlmAgent
 from google.genai import types
-from typing import List, Callable
+from typing import Any, List, Callable
 from tools.common import send_to_agent
 
 TOOLS = [send_to_agent]
@@ -15,8 +15,9 @@ class UserAgent(AgentBase):
         user_id: str = "default_user",
         tools: List[Callable] = TOOLS,
         model: str = "",
+        sub_agents: List[Any] = [],
     ):
-        super().__init__(context, user_id, tools, model)
+        super().__init__(context, user_id, tools, model, sub_agents)
 
     def Build(self):
         return LlmAgent(
@@ -63,7 +64,7 @@ class UserAgent(AgentBase):
       ## Instructions:
       De acuerdo a la información proporcionada en el contexto, redacta un mensaje claro y conciso para el agente de IA. Asegúrate de incluir toda la información relevante y de formular tu mensaje de manera que sea fácil y una vez lo tengas ejecuta la tool 'send_to_agent' para enviar el mensaje al agente de IA.
     
-      Termina la interacción devolviendo una respuesta vacia cuando consideres que la conversación ha cumplido su objetivo o que no hay más información relevante que proporcionar.
+      Termina la interacción devolviendo una respuesta vacia cuando consideres que la conversación ha cumplido su objetivo o que no hay más información relevante que proporcionar. Y llama al agente `AnalysisAgent` para que analice la conversación y entregue insights relevantes sobre el comportamiento del usuario, la efectividad del agente de IA y cualquier otro aspecto relevante que pueda ser útil para mejorar la experiencia del usuario y la performance del agente de IA.Este agente usa el sesion_id de la conversación para analizar los mensajes intercambiados entre el usuario y el agente de IA.
         ## Output Format:
         Como respuesta debes mandar esto
         ```json

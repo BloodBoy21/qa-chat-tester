@@ -35,11 +35,27 @@ class LogDB:
                 UPDATE logs SET updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
                 WHERE log_id = NEW.log_id;
             END;
+
+            CREATE TABLE IF NOT EXISTS insights (
+                insight_id   INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_id   TEXT NOT NULL,
+                analysis     TEXT,
+                created_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+                updated_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+            );
+            CREATE TRIGGER IF NOT EXISTS insights_updated_at
+            AFTER UPDATE ON insights
+            BEGIN
+                UPDATE insights SET updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
+                WHERE insight_id = NEW.insight_id;
+            END;
         """
         )
 
     def _now(self):
         return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    # ── logs ──
 
     def add(
         self,
@@ -115,6 +131,53 @@ class LogDB:
     def delete(self, log_id):
         self._conn.execute("DELETE FROM logs WHERE log_id = ?", (log_id,))
         self._conn.commit()
+
+    # ── insights ──
+
+    def add_insight(self, session_id, analysis):
+        now = self._now()
+        cursor = self._conn.execute(
+            """
+            INSERT INTO insights (session_id, analysis, created_at, updated_at)
+            VALUES (?, ?, ?, ?)
+            """,
+            (session_id, analysis, now, now),
+        )
+        self._conn.commit()
+        return cursor.lastrowid
+
+    def get_insight(self, insight_id):
+        row = self._conn.execute(
+            "SELECT * FROM insights WHERE insight_id = ?", (insight_id,)
+        ).fetchone()
+        return dict(row) if row else None
+
+    def get_insight_by_session(self, session_id):
+        row = self._conn.execute(
+            "SELECT * FROM insights WHERE session_id = ? ORDER BY created_at DESC LIMIT 1",
+            (session_id,),
+        ).fetchone()
+        return dict(row) if row else None
+
+    def get_insights_by_session(self, session_id):
+        rows = self._conn.execute(
+            "SELECT * FROM insights WHERE session_id = ? ORDER BY created_at",
+            (session_id,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def update_insight(self, insight_id, analysis):
+        self._conn.execute(
+            "UPDATE insights SET analysis = ? WHERE insight_id = ?",
+            (analysis, insight_id),
+        )
+        self._conn.commit()
+
+    def delete_insight(self, insight_id):
+        self._conn.execute("DELETE FROM insights WHERE insight_id = ?", (insight_id,))
+        self._conn.commit()
+
+    # ── lifecycle ──
 
     def close(self):
         self._conn.close()

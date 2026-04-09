@@ -17,18 +17,16 @@ class AgentBase:
         user_id: str = "default_user",
         tools: List[Callable] = [],
         model: str = MODEL_NAME,
+        sub_agents: List[Any] = [],
     ):
         self.model = model
         self.user_id = user_id
         self.context = context
         self.tools = tools
+        self.sub_agents = sub_agents
 
     def Build(self):
         raise NotImplementedError("Build method not implemented in base class.")
-
-    @property
-    def sub_agents(self):
-        return []
 
     def _build_tool(self, func: Callable) -> Callable:
         """
