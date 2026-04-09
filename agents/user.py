@@ -141,7 +141,8 @@ class UserAgent(AgentBase):
         scenario: string       // Contexto narrativo del escenario
         evidence: string       // URL del archivo de evidencia (imagen S3)
         ce: string             // Nombre del Centro Educativo
-        prompt: string         // Instrucciones paso a paso en Markdown para ejecutar la prueba
+        prompt: string         // Instrucciones paso a paso en Markdown para ejecutar la prueba,
+        analysisPrompt: string // Instrucciones para el análisis posterior de la conversación por parte del agente AnalysisAgent
         }
     """
 
