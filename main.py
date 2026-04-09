@@ -24,14 +24,21 @@ async def main():
     await runner.generate(agent="UserAgent")
     conversation_loop = True
     previous_response = None
-    while conversation_loop:
-        res = await runner.from_text(
-            "start" if previous_response is None else previous_response
-        )
-        if res is None:
-            logger.error("No response received from agent.")
-            break
-        previous_response = res
+    try:
+        while conversation_loop:
+            res = await runner.from_text(
+                "start" if previous_response is None else previous_response
+            )
+            if res is None:
+                logger.error("No response received from agent.")
+                break
+            previous_response = res
+    except KeyboardInterrupt:
+        logger.info("Conversation interrupted by user.")
+    except Exception as e:
+        logger.error(f"An error occurred: {e}")
+    finally:
+        logger.info("Ending conversation loop.")
 
 
 if __name__ == "__main__":

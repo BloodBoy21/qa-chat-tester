@@ -61,4 +61,6 @@ def send_to_agent(
             "Authorization": f"Bearer {_generate_token()}",
         },
     )
-    return response.json()
+    response = response.json()
+    logger.info(f"Received response from agent: {response}")
+    return response

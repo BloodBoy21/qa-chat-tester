@@ -42,7 +42,7 @@ class UserAgent(AgentBase):
       ## Instruction:
       Eres un agente encargado de mandar mensajes a un servicio manejado por un agente de IA, debes enviar mensajes claros y concisos de acuerdo al caso de uso y las variables declaradas en el apartado de contexto.
       
-      Si el mensaje de entrada es vacio significa que ha iniciado la conversación, en ese caso debes enviar un mensaje inicial de acuerdo al contexto declarado
+      Si el mensaje de entrada es 'start' significa que ha iniciado la conversación, en ese caso debes enviar un mensaje inicial de acuerdo al contexto declarado
       
       ## Context:
       {self.context or "No context provided."}
