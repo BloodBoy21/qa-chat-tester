@@ -80,11 +80,23 @@ def send_to_agent(
     response = response.json()
     response = clean_response(response)
     logger.info(f"Received response from agent: {response}")
-    save_interaction(message=message, answer=response, user_id=user_id)
+    save_interaction(
+        message=message,
+        answer=response,
+        user_id=user_id,
+        files=attachments,
+        images=images,
+    )
     return response
 
 
-def save_interaction(message: str, answer: dict, user_id: str = "default_user"):
+def save_interaction(
+    message: str,
+    answer: dict,
+    user_id: str = "default_user",
+    files: list[dict] = [],
+    images: list[str] = [],
+):
     """
     Save the interaction between the user and the agent to the database.
     Args:
@@ -105,6 +117,8 @@ def save_interaction(message: str, answer: dict, user_id: str = "default_user"):
             raw_response=json.dumps(answer),
             response=answer.get("text", ""),
             session_id=answer.get("session_id", ""),
+            files=files,
+            images=images,
         )
     except Exception as e:
         logger.error(f"Error saving interaction: {e}")

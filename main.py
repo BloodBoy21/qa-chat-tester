@@ -6,7 +6,6 @@ from loguru import logger
 import os
 from utils.agent_runner import Agent as AgentRunner
 import asyncio
-from utils.prompt_utils import extract_json_blocks
 
 MODEL_NAME = os.getenv("MODEL_NAME", "gemini-2.5-flash")
 args = dict(arg.split("=", 1) for arg in sys.argv[1:] if "=" in arg)

@@ -22,12 +22,13 @@ class LogDB:
                 message      TEXT,
                 response     TEXT,
                 raw_response TEXT,
+                files        TEXT,
+                images       TEXT,
                 user_id      TEXT,
                 session_id   TEXT,
                 created_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
                 updated_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
             );
-
             CREATE TRIGGER IF NOT EXISTS logs_updated_at
             AFTER UPDATE ON logs
             BEGIN
@@ -40,17 +41,28 @@ class LogDB:
     def _now(self):
         return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
-    def add(self, message, response, raw_response, user_id, session_id):
+    def add(
+        self,
+        message,
+        response,
+        raw_response,
+        user_id,
+        session_id,
+        files=None,
+        images=None,
+    ):
         now = self._now()
         cursor = self._conn.execute(
             """
-            INSERT INTO logs (message, response, raw_response, user_id, session_id, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO logs (message, response, raw_response, files, images, user_id, session_id, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 message,
                 response,
                 json.dumps(raw_response),
+                json.dumps(files) if files is not None else None,
+                json.dumps(images) if images is not None else None,
                 user_id,
                 session_id,
                 now,
@@ -80,12 +92,21 @@ class LogDB:
         return [dict(r) for r in rows]
 
     def update(self, log_id, **fields):
-        allowed = {"message", "response", "raw_response", "user_id", "session_id"}
+        allowed = {
+            "message",
+            "response",
+            "raw_response",
+            "files",
+            "images",
+            "user_id",
+            "session_id",
+        }
         to_update = {k: v for k, v in fields.items() if k in allowed}
         if not to_update:
             return
-        if "raw_response" in to_update:
-            to_update["raw_response"] = json.dumps(to_update["raw_response"])
+        for json_field in ("raw_response", "files", "images"):
+            if json_field in to_update and to_update[json_field] is not None:
+                to_update[json_field] = json.dumps(to_update[json_field])
         sets = ", ".join(f"{k} = ?" for k in to_update)
         vals = list(to_update.values()) + [log_id]
         self._conn.execute(f"UPDATE logs SET {sets} WHERE log_id = ?", vals)
