@@ -57,23 +57,22 @@ def send_to_agent(
     Returns:
         dict: The response from the agent.
     """
-    logger.info(
-        f"Sending message to agent: {message}, user_id: {user_id}, is_hsm: {is_hsm}, hsm_name: {hsm_name}, images: {images}, attachments: {attachments}, account_id: {account_id}, session_id: {session_id}, session_backend: {session_backend}, persist_session: {persist_session}, SERVICE_URL: {SERVICE_URL}"
-    )
+    data = {
+        "account_id": account_id,
+        "user_id": user_id,
+        "text": message,
+        "is_hsm": is_hsm,
+        "hsm_name": hsm_name,
+        "images": images,
+        "attachments": attachments,
+        "session_id": session_id,
+        "session_backend": session_backend,
+        "persist_session": persist_session,
+    }
+    logger.info(f"Sending message to agent, data: {data}")
     response = r.post(
         url=f"{SERVICE_URL}/chat",
-        json={
-            "account_id": account_id,
-            "user_id": user_id,
-            "text": message,
-            "is_hsm": is_hsm,
-            "hsm_name": hsm_name,
-            "images": images,
-            "attachments": attachments,
-            "session_id": session_id,
-            "session_backend": session_backend,
-            "persist_session": persist_session,
-        },
+        json=data,
         headers={
             "Authorization": f"Bearer {_generate_token()}",
         },

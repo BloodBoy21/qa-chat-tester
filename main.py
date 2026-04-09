@@ -6,6 +6,7 @@ from loguru import logger
 import os
 from utils.agent_runner import Agent as AgentRunner
 import asyncio
+from utils.prompt_utils import extract_json_blocks
 
 MODEL_NAME = os.getenv("MODEL_NAME", "gemini-2.5-flash")
 args = dict(arg.split("=", 1) for arg in sys.argv[1:] if "=" in arg)
@@ -29,7 +30,7 @@ async def main():
             res = await runner.from_text(
                 "start" if previous_response is None else previous_response
             )
-            if res is None:
+            if res is None or res.strip() == "" or res.strip() == "{}":
                 logger.error("No response received from agent.")
                 break
             previous_response = res

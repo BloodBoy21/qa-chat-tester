@@ -40,12 +40,18 @@ class UserAgent(AgentBase):
         return f"""
       
       ## Instruction:
-      Eres un agente encargado de mandar mensajes a un servicio manejado por un agente de IA, debes enviar mensajes claros y concisos de acuerdo al caso de uso y las variables declaradas en el apartado de contexto.
+      Eres un QA engineer simulando ser un usuario en diferentes escenarios (usar el escenario que se proporciona en el contexto)  encargado de mandar mensajes a un servicio manejado por un agente de IA, debes enviar mensajes claros y concisos de acuerdo al caso de uso y las variables declaradas en el apartado de contexto.
       
       Si el mensaje de entrada es 'start' significa que ha iniciado la conversación, en ese caso debes enviar un mensaje inicial de acuerdo al contexto declarado, si es diferente a 'start' entonces debes responder al mensaje anterior de la conversación, siempre tomando en cuenta el contexto declarado.
       
       Debes guardar 'session_id' de la respuesta para usarla en las siguientes interacciones, esto con el fin de mantener la conversación en el mismo contexto.
+
+       Recuerda que eres el usuario en esta interracion y tus mensajes son presentados al agente de IA, por lo que debes redactar tus mensajes de manera clara y concisa para que el agente de IA pueda entenderlos y responder de manera adecuada.
+      
       ## Context:
+      Formato del contexto:
+      {self.context_format}
+      Contexto de la conversación:
       {self.context or "No context provided."}
       
       ##Formato de mensaje recibido por el agente de IA:
@@ -54,6 +60,7 @@ class UserAgent(AgentBase):
       ## Instructions:
       De acuerdo a la información proporcionada en el contexto, redacta un mensaje claro y conciso para el agente de IA. Asegúrate de incluir toda la información relevante y de formular tu mensaje de manera que sea fácil y una vez lo tengas ejecuta la tool 'send_to_agent' para enviar el mensaje al agente de IA.
     
+      Termina la interacción devolviendo una respuesta vacia cuando consideres que la conversación ha cumplido su objetivo o que no hay más información relevante que proporcionar.
         ## Output Format:
         Como respuesta debes mandar esto
         ```json
@@ -62,6 +69,11 @@ class UserAgent(AgentBase):
             "response": "La respuesta del agente de IA despues de ejecutar la tool send_to_agent"
         }}
         ```
+        Si debes terminar la conversación, devuelve:
+        ```json
+        {{}}
+        ```
+        SIEMPRE RESPONDE EN FORMATO JSON, NUNCA RESPONDAS EN TEXTO PLANO, SI NO HAY INFORMACIÓN RELEVANTE QUE PROPORCIONAR O CONSIDERAS QUE LA CONVERSACIÓN HA CUMPLIDO SU OBJETIVO DEVUELVE UNA RESPUESTA VACIA.
 
     """
 
@@ -113,5 +125,18 @@ class UserAgent(AgentBase):
         thoughtsTokenCount: int
         totalTokenCount: int
         trafficType: string          // e.g. "ON_DEMAND"
+        }
+    """
+
+    @property
+    def context_format(self):
+        return """
+        {
+        user_id: string        // ID del usuario que ejecuta la prueba
+        objective: string      // Descripción del objetivo de la prueba
+        scenario: string       // Contexto narrativo del escenario
+        evidence: string       // URL del archivo de evidencia (imagen S3)
+        ce: string             // Nombre del Centro Educativo
+        prompt: string         // Instrucciones paso a paso en Markdown para ejecutar la prueba
         }
     """
