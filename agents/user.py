@@ -51,6 +51,9 @@ class UserAgent(AgentBase):
       ## Context:
       Formato del contexto:
       {self.context_format}
+      Formato de campañas disponibles:
+      {self.campaign_format}
+      Que es una campaña?: Cuando el escenario mencione que el usuario recibe una campaña se usará la campaña correspondiente en "Campañas" para inyectar a la conversación y simular la recepción de la campaña (mensaje de plantilla de WhatsApp solicitando información específica al usuario).
       Contexto de la conversación:
       {self.context or "No context provided."}
       
@@ -138,5 +141,19 @@ class UserAgent(AgentBase):
         evidence: string       // URL del archivo de evidencia (imagen S3)
         ce: string             // Nombre del Centro Educativo
         prompt: string         // Instrucciones paso a paso en Markdown para ejecutar la prueba
+        }
+    """
+
+    @property
+    def campaign_format(self):
+        return """
+        {
+        campaigns: [
+            {
+            campaign_id: string           // ID único de la campaña
+            campaign_name: string         // Nombre descriptivo de la campaña
+            whatsapp_template_name: string // Nombre del template de WhatsApp asociado
+            }
+        ]
         }
     """
