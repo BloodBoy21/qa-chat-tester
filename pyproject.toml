@@ -1,0 +1,19 @@
+[project]
+name = "qachattester"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "google-adk>=1.28.1",
+    "loguru>=0.7.3",
+    "pyrefly>=0.60.0",
+    "python-dotenv>=1.2.2",
+    "requests>=2.33.1",
+]
+
+[tool.pyrefly]
+project-includes = [
+    "**/*.py*",
+    "**/*.ipynb",
+]

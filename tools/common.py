@@ -1,0 +1,64 @@
+from dotenv import load_dotenv
+import requests as r
+import os
+from loguru import logger
+
+load_dotenv()
+
+SERVICE_URL = os.getenv("AGENT_URL", "")
+
+
+def _generate_token() -> str:
+    return os.getenv("AGENT_TOKEN", "")
+
+
+def send_to_agent(
+    message: str,
+    user_id: str = "default_user",
+    is_hsm: bool = False,
+    hsm_name: str = "",
+    images: list[str] = [],
+    attachments: list[dict[str, str]] = [],
+    account_id: str = "500",
+    session_id: str = "",
+    session_backend: str = "memory",
+    persist_session: bool = False,
+) -> dict:
+    """
+    Send a message to the agent and get the response.
+    Args:
+        message (str): The message to send to the agent.
+        user_id (str): The ID of the user sending the message.
+        is_hsm (bool): Whether the message is an HSM (Highly Structured Message).
+        hsm_name (str): The name of the HSM template, if applicable.
+        images (list[str]): A list of image URLs to include in the message. e.g ( ["https://example.com/image1.jpg", "https://example.com/image2.jpg"])
+        attachments (list[dict[str, str]]): A list of attachment URLs to include in the message. e.g ( [{ "url": "https://example.com/solicitud_ingreso.pdf", "type": "pdf" }])
+        account_id (str): The ID of the account associated with the message.
+        session_id (str): The ID of the session for maintaining context.
+        session_backend (str): The backend to use for session management (e.g., "memory", "redis").
+        persist_session (bool): Whether to persist the session after the message is processed.
+    Returns:
+        dict: The response from the agent.
+    """
+    logger.info(
+        f"Sending message to agent: {message}, user_id: {user_id}, is_hsm: {is_hsm}, hsm_name: {hsm_name}, images: {images}, attachments: {attachments}, account_id: {account_id}, session_id: {session_id}, session_backend: {session_backend}, persist_session: {persist_session}, SERVICE_URL: {SERVICE_URL}"
+    )
+    response = r.post(
+        url=f"{SERVICE_URL}/chat",
+        json={
+            "account_id": account_id,
+            "user_id": user_id,
+            "text": message,
+            "is_hsm": is_hsm,
+            "hsm_name": hsm_name,
+            "images": images,
+            "attachments": attachments,
+            "session_id": session_id,
+            "session_backend": session_backend,
+            "persist_session": persist_session,
+        },
+        headers={
+            "Authorization": f"Bearer {_generate_token()}",
+        },
+    )
+    return response.json()
