@@ -31,7 +31,7 @@ class UserAgent(AgentBase):
                 top_p=0.95,
                 top_k=40,
             ),
-            tools=self.tools,
+            tools=[self._build_tool(tool) for tool in self.tools],
             sub_agents=self.sub_agents,
         )
 

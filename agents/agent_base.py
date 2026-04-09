@@ -1,14 +1,11 @@
 import os
 from typing import Callable, Dict, Any, List, Union
-import json
-from utils.tool_utils import (
-    fix_params,
-    to_snake_case,
-    make_signature,
-)
 from utils.built_in_func import call_built_in
 from loguru import logger
 import uuid
+import functools
+import inspect
+from typing import Callable, get_type_hints
 
 MODEL_NAME = os.getenv("MODEL_NAME", "gemini-2.0-flash-exp")
 
@@ -33,47 +30,32 @@ class AgentBase:
     def sub_agents(self):
         return []
 
-    def _build_tool(
-        self,
-        doc: Dict[str, Any],
-    ) -> Union[Callable, List[Callable]]:
+    def _build_tool(self, func: Callable) -> Callable:
+        """
+        Build a tool function with fixed default parameters.
+        Preserves signature and type hints so ADK generates a valid schema.
+        """
+        default_params = {"user_id": self.user_id}
 
-        raw_name = doc.get("name", "")
-        name = to_snake_case(raw_name)
-        description = doc.get("description", "")
-        params = doc.get("params", [])
-        params = fix_params(params)
-        docstring = doc.get("docstring", "")
-        fref = doc.get("functionRef", "")
+        sig = inspect.signature(func)
+        hints = get_type_hints(func)
 
-        if not docstring:
-            lines = [description] if description else [f"Tool **{name}**."]
-            if params:
-                lines.append("")
-                lines.append("Args:")
-                for p in params:
-                    ptype = p.get("type", "string")
-                    lines.append(f"    {p['name']} ({ptype})")
-            docstring = "\n".join(lines) + "\n"
+        # Remove fixed params from signature
+        new_params = [
+            p for name, p in sig.parameters.items() if name not in default_params
+        ]
 
-        def _wrap(caller: Callable[[dict], object]) -> Callable:
-            sig = make_signature(params)
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            merged = {**default_params, **kwargs}
+            return func(*args, **merged)
 
-            def tool_func(**kwargs):
-                return caller(kwargs)
+        wrapper.__signature__ = sig.replace(parameters=new_params)
+        wrapper.__annotations__ = {
+            k: v for k, v in hints.items() if k not in default_params
+        }
 
-            tool_func.__name__ = name
-            tool_func.__doc__ = docstring
-            # pyrefly: ignore [missing-attribute]
-            tool_func.__signature__ = sig
-            tool_func.__annotations__ = {
-                p.name: p.annotation for p in sig.parameters.values()
-            }
-            tool_func.__annotations__["return"] = dict
-            return tool_func
-
-        default_kwargs = {"user_id": self.user_id}
-        return _wrap(lambda kw: call_built_in(fref, {**default_kwargs, **kw}))
+        return wrapper
 
     def _uuid_session_str(self) -> str:
         """
