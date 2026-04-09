@@ -1,7 +1,7 @@
 from .agent_base import AgentBase
 from google.adk.agents import LlmAgent
 from google.genai import types
-from typing import List, Dict, Any, Callable, Union
+from typing import List, Callable
 from tools.common import send_to_agent
 
 TOOLS = [send_to_agent]
@@ -42,11 +42,15 @@ class UserAgent(AgentBase):
       ## Instruction:
       Eres un agente encargado de mandar mensajes a un servicio manejado por un agente de IA, debes enviar mensajes claros y concisos de acuerdo al caso de uso y las variables declaradas en el apartado de contexto.
       
-      Si el mensaje de entrada es 'start' significa que ha iniciado la conversación, en ese caso debes enviar un mensaje inicial de acuerdo al contexto declarado
+      Si el mensaje de entrada es 'start' significa que ha iniciado la conversación, en ese caso debes enviar un mensaje inicial de acuerdo al contexto declarado, si es diferente a 'start' entonces debes responder al mensaje anterior de la conversación, siempre tomando en cuenta el contexto declarado.
       
+      Debes guardar 'session_id' de la respuesta para usarla en las siguientes interacciones, esto con el fin de mantener la conversación en el mismo contexto.
       ## Context:
       {self.context or "No context provided."}
       
+      ##Formato de mensaje recibido por el agente de IA:
+        {self.message_format}
+    
       ## Instructions:
       De acuerdo a la información proporcionada en el contexto, redacta un mensaje claro y conciso para el agente de IA. Asegúrate de incluir toda la información relevante y de formular tu mensaje de manera que sea fácil y una vez lo tengas ejecuta la tool 'send_to_agent' para enviar el mensaje al agente de IA.
     
@@ -64,3 +68,50 @@ class UserAgent(AgentBase):
     @property
     def description(self):
         return "Agente encargado de redactar mensajes claros y concisos para un agente de IA, utilizando la información proporcionada en el contexto y enviando los mensajes a través de la tool 'send_to_agent'."
+
+    @property
+    def message_format(self):
+        return """
+        AgentResponse {
+        session_id: string           // UUID de la sesión
+        text: string                 // Respuesta final del bot en texto plano
+        images: string[]             // URLs de imágenes en la respuesta (puede estar vacío)
+        messages: Message[]          // Lista de mensajes generados
+        tool_calls: ToolCall[]       // Llamadas a herramientas ejecutadas (puede estar vacío)
+        requires_confirmation: bool? // Si requiere confirmación del usuario (nullable)
+        metadata: object             // Metadata adicional (puede estar vacío)
+        traces: Trace[]              // Trazas de ejecución del agente
+        }
+
+        Message {
+        author: string               // "bot" | "user"
+        text: string                 // Contenido del mensaje
+        images: string[]             // Imágenes adjuntas
+        metadata: {
+            agent: string              // Nombre del agente (e.g. "MultiAgent")
+            model: string              // Modelo usado (e.g. "gemini/gemini-2.5-flash")
+        }
+        }
+
+        Trace {
+        created_at: string           // Timestamp ISO
+        updated_at: string           // Timestamp ISO
+        title: string                // "Agent before" | "Model before" | "Model after" | "Agent after"
+        tool: bool                   // Si la traza es de una herramienta
+        agent: string                // Nombre del agente
+        type: string                 // "agent_input" | "model_input" | "model_output" | "agent_output"
+        when: string                 // "before" | "after"
+        is_response: bool            // Si es parte de la respuesta final
+        payload: object              // Contenido variable según el type
+        account_id: int              // ID de cuenta
+        user_id: int                 // ID de usuario
+        }
+
+        UsageMetadata {                // Dentro de payload en traces tipo "model_output"
+        candidatesTokenCount: int
+        promptTokenCount: int
+        thoughtsTokenCount: int
+        totalTokenCount: int
+        trafficType: string          // e.g. "ON_DEMAND"
+        }
+    """

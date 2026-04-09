@@ -2,6 +2,8 @@ from dotenv import load_dotenv
 import requests as r
 import os
 from loguru import logger
+import json
+from db.sql import LogDB
 
 load_dotenv()
 
@@ -10,6 +12,21 @@ SERVICE_URL = os.getenv("AGENT_URL", "")
 
 def _generate_token() -> str:
     return os.getenv("AGENT_TOKEN", "")
+
+
+def clean_response(response_dict: dict):
+    if isinstance(response_dict, str):
+        response_dict = json.loads(response_dict)
+
+    clean = {**response_dict}
+    if "traces" in clean:
+        for trace in clean["traces"]:
+            payload = trace.get("payload", {})
+            content = payload.get("content", {})
+            if isinstance(content, dict):
+                for part in content.get("parts", []):
+                    part.pop("thoughtSignature", None)
+    return clean
 
 
 def send_to_agent(
@@ -62,5 +79,33 @@ def send_to_agent(
         },
     )
     response = response.json()
+    response = clean_response(response)
     logger.info(f"Received response from agent: {response}")
+    save_interaction(message=message, answer=response, user_id=user_id)
     return response
+
+
+def save_interaction(message: str, answer: dict, user_id: str = "default_user"):
+    """
+    Save the interaction between the user and the agent to the database.
+    Args:
+        message (str): The message sent by the user.
+        answer (dict): The response received from the agent full dictionary.
+        user_id (str): The ID of the user involved in the interaction.
+    Returns:
+        None
+    """
+    logger.info(
+        f"Saving interaction, message: {message}, answer: {answer}, user_id: {user_id}"
+    )
+    try:
+        log_db = LogDB()
+        log_db.add(
+            user_id=user_id,
+            message=message,
+            raw_response=json.dumps(answer),
+            response=answer.get("text", ""),
+            session_id=answer.get("session_id", ""),
+        )
+    except Exception as e:
+        logger.error(f"Error saving interaction: {e}")
