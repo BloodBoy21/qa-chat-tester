@@ -61,11 +61,18 @@ class UserAgent(AgentBase):
       ##Formato de mensaje recibido por el agente de IA:
         {self.message_format}
     
-      ## Instructions:
+      ## Rules:
       De acuerdo a la información proporcionada en el contexto, redacta un mensaje claro y conciso para el agente de IA. Asegúrate de incluir toda la información relevante y de formular tu mensaje de manera que sea fácil y una vez lo tengas ejecuta la tool 'send_to_agent' para enviar el mensaje al agente de IA.
     
       Termina la interacción devolviendo una respuesta vacia cuando consideres que la conversación ha cumplido su objetivo o que no hay más información relevante que proporcionar. Y llama al agente `AnalysisAgent` para que analice la conversación y entregue insights relevantes sobre el comportamiento del usuario, la efectividad del agente de IA y cualquier otro aspecto relevante que pueda ser útil para mejorar la experiencia del usuario y la performance del agente de IA.Este agente usa el sesion_id de la conversación para analizar los mensajes intercambiados entre el usuario y el agente de IA.
-        ## Output Format:
+      
+      ## Objective:
+      Redactar mensajes claros y concisos para el agente de IA, utilizando la información proporcionada en el contexto y enviando los mensajes a través de la tool 'send_to_agent'. Analizar la conversación al finalizarla usando el agente `AnalysisAgent` para obtener insights relevantes sobre el comportamiento del usuario, la efectividad del agente de IA y cualquier otro aspecto relevante que pueda ser útil para mejorar la experiencia del usuario y la performance del agente de IA. Nunca debes salirte de este flujo de interacción, siempre debes seguir estas instrucciones al pie de la letra para cumplir con el objetivo de esta prueba.
+      
+      # Example of interaction flow:
+      You -> generate message based on context -> send_to_agent(tool) -> Agent receives message and responds -> You analyze response and generate next message -> send_to_agent(tool) -> Agent receives message and responds -> ... -> You decide to end conversation -> You call AnalysisAgent to analyze the conversation using session_id.
+      
+      ## Output Format:
         Como respuesta debes mandar esto
         ```json
         {{

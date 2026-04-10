@@ -137,11 +137,27 @@ def save_analysis(analysis: str, session_id: str, *args, **kwargs) -> Dict[str, 
         dict: A dictionary indicating the status of the save operation.
     """
     logger.info(f"Saving analysis, session_id: {session_id}, analysis: {analysis}")
+    analysis_dict = {}
+    if isinstance(analysis, str):
+        try:
+            analysis_dict = json.loads(analysis)
+        except json.JSONDecodeError as e:
+            analysis_dict = {
+                "insights": analysis,
+            }
+    elif isinstance(analysis, dict):
+        analysis_dict = analysis
+    else:
+        logger.error("Invalid analysis format. Must be a JSON string or a dictionary.")
+        return {
+            "status": "error",
+            "message": "Invalid analysis format. Must be a JSON string or a dictionary.",
+        }
     try:
         log_db = LogDB()
         log_db.add_insight(
             session_id=session_id,
-            analysis=analysis,
+            analysis=analysis_dict.get("insights", ""),
         )
         return {"status": "success", "message": "Analysis saved successfully."}
     except Exception as e:

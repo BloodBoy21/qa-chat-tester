@@ -50,7 +50,7 @@ class AnalysisAgent(AgentBase):
          ## Context:
          {self.context or "No context provided."}
          
-         ## Output Format:
+         ## Output:
          Debes responder en formato JSON con la siguiente estructura:
          ```json
          {{
@@ -58,6 +58,8 @@ class AnalysisAgent(AgentBase):
              }}
         ```
         Recuerda que siempre se debe ejecutar la tool `save_analysis` con el análisis realizado para guardar el resultado del análisis si es exitoso, si no se puede realizar el análisis se guarda con un mensaje indicando que no se pudo realizar el análisis.
+        
+        SIMPRE DEVUELVE EL ANALISIS EN EL CAMPO "insights" DEL JSON DE RESPUESTA, NUNCA DEJES ESTE CAMPO VACIO, SI NO PUEDES REALIZAR UN ANALISIS DETALLADO PROPORCIONA UN MENSAJE EXPLICANDO POR QUE NO SE PUDO REALIZAR EL ANALISIS, PERO NUNCA DEJES EL CAMPO "insights" VACIO Y EJECUTA SIEMPRE LA TOOL `save_analysis` PARA GUARDAR EL RESULTADO DEL ANALISIS.
 
     """
 
