@@ -4,7 +4,9 @@ from loguru import logger
 from db.sql import LogDB
 
 
-def get_messages_by_session_id(session_id: str, *args, **kwargs) -> list[dict]:
+def get_messages_by_session_id(
+    session_id: str, run_id: str, *args, **kwargs
+) -> list[dict]:
     """
     Get messages from the database by session ID.
     Args:
@@ -13,7 +15,7 @@ def get_messages_by_session_id(session_id: str, *args, **kwargs) -> list[dict]:
         list: A list of messages associated with the given session ID.
     """
     log_db = LogDB()
-    messages = log_db.get_by_session(session_id)
+    messages = log_db.get_by_session(session_id, run_id)
     messages = [
         {
             "message_sent": message["message"],

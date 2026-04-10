@@ -10,9 +10,15 @@ import asyncio
 from utils.prompt_utils import extract_json_blocks
 import json
 import datetime
+import uuid
+from db.sql import LogDB
 
 MODEL_NAME = os.getenv("MODEL_NAME", "gemini-2.5-flash")
 args = dict(arg.split("=", 1) for arg in sys.argv[1:] if "=" in arg)
+
+
+def generate_run_id():
+    return str(uuid.uuid4())
 
 
 async def run_from_json_file(file_path: str):
@@ -72,17 +78,35 @@ async def main():
     await run_agent(context=context, user_id=user_id, model=model)
 
 
+async def run_analysis_agent(agent, run_id: str, user_id: str):
+    log_db = LogDB()
+    runner = AgentRunner(user_id=user_id, agent=agent)
+    await runner.generate()
+    session_id = log_db.get_session_id_by_run_id(run_id)
+    if session_id is None:
+        logger.error(
+            f"No session_id found for run_id {run_id}. Cannot run AnalysisAgent."
+        )
+        return
+    await runner.from_text(session_id)
+
+
 async def run_agent(context: str, user_id: str, model: str, batch=None):
+    log_db = LogDB()
+    run_id = generate_run_id()
     analysis_agent = AnalysisAgent(context=context, user_id=user_id, model=model)
+    analysis_agent.set_run_id(run_id)
+    analysis_agent = analysis_agent.Build()
     user_agent = UserAgent(
         context=context,
         user_id=user_id,
         model=model,
-        sub_agents=[analysis_agent.Build()],
+        sub_agents=[analysis_agent],
     )
+    user_agent.set_run_id(run_id)
     agent = user_agent.Build()
     runner = AgentRunner(user_id=user_id, agent=agent)
-    await runner.generate(agent="UserAgent")
+    await runner.generate()
     conversation_loop = True
     previous_response = None
     try:
@@ -119,6 +143,13 @@ async def run_agent(context: str, user_id: str, model: str, batch=None):
             logger.info(
                 f"Finished processing batch for user_id: {user_id}, batch: {batch}"
             )
+        has_analysis = log_db.insight_exists_by_run_id(run_id)
+        if not has_analysis:
+            logger.warning(
+                f"No analysis found for run_id {run_id}. This may indicate an issue with the conversation flow or that the AnalysisAgent was not called properly."
+            )
+            await run_analysis_agent(analysis_agent, run_id, user_id)
+
         logger.info("Ending conversation loop.")
 
 

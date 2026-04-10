@@ -52,6 +52,7 @@ class AnalysisAgent(AgentBase):
     ### Step 2 — Analyze
     - Usa los mensajes obtenidos en Step 1.
     - Sigue el `analysisPrompt` del contexto como guía de análisis.
+    - Si no existe el analysisPrompt, haz un análisis general de la conversación.
     - Si no hay mensajes: tu análisis es "No se obtuvieron mensajes para
     session_id X. Posible error en la conversación o ID inválido."
 
@@ -61,7 +62,12 @@ class AnalysisAgent(AgentBase):
     - Sin datos / error → guarda explicación del fallo.
     - NUNCA respondas sin haber ejecutado esta tool.
 
-    ### Step 4 — Return JSON
+
+    ### Step 4 — Evalúa si la conversación cumplió su objetivo según el contexto.
+    - Si NO se cumplió el objetivo → "complete": false + explicación en "insights".
+    - Si SÍ se cumplió el objetivo → "complete": true + insights detallados.
+
+    ### Step 5 — Return JSON
     ```json
     {{{{
         "insights": "<análisis detallado o razón de fallo — NUNCA vacío>",
@@ -74,6 +80,10 @@ class AnalysisAgent(AgentBase):
     - "insights" NUNCA puede ser string vacío.
     - Si no puedes analizar → "complete": false + explicación en "insights".
 
+    RECUERDA QUE DEBES RESPONDER SIEMPRE CON EL JSON INDICADO EN EL STEP 5, PERO SOLO DESPUÉS DE HABER EJECUTADO LA TOOL `save_analysis`. NUNCA RESPONDAS ANTES DE HABER GUARDADO EL ANÁLISIS, INCLUSO SI EL ANÁLISIS ES QUE NO SE OBTUVIERON MENSAJES O HUBO UN ERROR. SI NO PUEDES OBTENER LOS MENSAJES, TU RESPUESTA DEBE EXPLICAR EL PROBLEMA Y DEBE INDICAR QUE LA CONVERSACIÓN NO SE COMPLETÓ, PERO DEBES ASEGURARTE DE GUARDAR ESTA INFORMACIÓN USANDO LA TOOL `save_analysis` ANTES DE RESPONDER CON EL JSON.
+    
+    RECUERDA QUE EL ANÁLISIS DEBE SER DETALLADO Y BASADO EN LOS MENSAJES OBTENIDOS. SI NO HAY MENSAJES, TU ANÁLISIS DEBE EXPLICAR ESTA SITUACIÓN Y NO DEBE QUEDAR VACÍO. SIEMPRE DEBES EJECUTAR EL FLUJO COMPLETO DE HERRAMIENTAS Y RESPUESTA, INCLUSO EN CASO DE ERRORES O FALTA DE DATOS.
+    
     ## Context:
     {self.context or "No context provided."}
     """

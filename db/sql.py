@@ -26,6 +26,7 @@ class LogDB:
                 images       TEXT,
                 user_id      TEXT,
                 session_id   TEXT,
+                run_id       TEXT,
                 created_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
                 updated_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
             );
@@ -39,6 +40,7 @@ class LogDB:
             CREATE TABLE IF NOT EXISTS insights (
                 insight_id   INTEGER PRIMARY KEY AUTOINCREMENT,
                 session_id   TEXT NOT NULL,
+                run_id       TEXT,
                 analysis     TEXT,
                 complete     INTEGER NOT NULL DEFAULT 0,
                 created_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
@@ -67,12 +69,13 @@ class LogDB:
         session_id,
         files=None,
         images=None,
+        run_id=None,
     ):
         now = self._now()
         cursor = self._conn.execute(
             """
-            INSERT INTO logs (message, response, raw_response, files, images, user_id, session_id, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO logs (message, response, raw_response, files, images, user_id, session_id, run_id, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 message,
@@ -82,6 +85,7 @@ class LogDB:
                 json.dumps(images) if images is not None else None,
                 user_id,
                 session_id,
+                run_id,
                 now,
                 now,
             ),
@@ -95,10 +99,17 @@ class LogDB:
         ).fetchone()
         return dict(row) if row else None
 
-    def get_by_session(self, session_id):
-        rows = self._conn.execute(
-            "SELECT * FROM logs WHERE session_id = ? ORDER BY created_at", (session_id,)
-        ).fetchall()
+    def get_by_session(self, session_id, run_id=None):
+        if run_id:
+            rows = self._conn.execute(
+                "SELECT * FROM logs WHERE session_id = ? AND run_id = ? ORDER BY created_at",
+                (session_id, run_id),
+            ).fetchall()
+        else:
+            rows = self._conn.execute(
+                "SELECT * FROM logs WHERE session_id = ? ORDER BY created_at",
+                (session_id,),
+            ).fetchall()
         return [dict(r) for r in rows]
 
     def get_by_user(self, user_id, limit=50):
@@ -117,6 +128,7 @@ class LogDB:
             "images",
             "user_id",
             "session_id",
+            "run_id",
         }
         to_update = {k: v for k, v in fields.items() if k in allowed}
         if not to_update:
@@ -135,14 +147,14 @@ class LogDB:
 
     # ── insights ──
 
-    def add_insight(self, session_id, analysis, complete=False):
+    def add_insight(self, session_id, analysis, complete=False, run_id=None):
         now = self._now()
         cursor = self._conn.execute(
             """
-            INSERT INTO insights (session_id, analysis, complete, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO insights (session_id, run_id, analysis, complete, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?)
             """,
-            (session_id, analysis, 1 if complete else 0, now, now),
+            (session_id, run_id, analysis, 1 if complete else 0, now, now),
         )
         self._conn.commit()
         return cursor.lastrowid
@@ -175,7 +187,7 @@ class LogDB:
         return [self._row_to_insight(r) for r in rows]
 
     def update_insight(self, insight_id, **fields):
-        allowed = {"analysis", "complete"}
+        allowed = {"analysis", "complete", "run_id"}
         to_update = {k: v for k, v in fields.items() if k in allowed}
         if not to_update:
             return
@@ -189,6 +201,19 @@ class LogDB:
     def delete_insight(self, insight_id):
         self._conn.execute("DELETE FROM insights WHERE insight_id = ?", (insight_id,))
         self._conn.commit()
+
+    def insight_exists_by_run_id(self, run_id):
+        row = self._conn.execute(
+            "SELECT 1 FROM insights WHERE run_id = ? LIMIT 1", (run_id,)
+        ).fetchone()
+        return row is not None
+
+    def get_session_id_by_run_id(self, run_id):
+        row = self._conn.execute(
+            "SELECT session_id FROM logs WHERE run_id = ? ORDER BY created_at DESC LIMIT 1",
+            (run_id,),
+        ).fetchone()
+        return row["session_id"] if row else None
 
     # ── lifecycle ──
 

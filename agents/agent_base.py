@@ -24,6 +24,10 @@ class AgentBase:
         self.context = context
         self.tools = tools
         self.sub_agents = sub_agents
+        self.run_id = None
+
+    def set_run_id(self, run_id):
+        self.run_id = run_id
 
     def Build(self):
         raise NotImplementedError("Build method not implemented in base class.")
@@ -33,7 +37,7 @@ class AgentBase:
         Build a tool function with fixed default parameters.
         Preserves signature and type hints so ADK generates a valid schema.
         """
-        default_params = {"user_id": self.user_id}
+        default_params = {"user_id": self.user_id, "run_id": self.run_id}
 
         sig = inspect.signature(func)
         hints = get_type_hints(func)

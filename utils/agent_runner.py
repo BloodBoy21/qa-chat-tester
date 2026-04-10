@@ -17,11 +17,11 @@ class Agent:
         self.runner: Runner | None = None
         self.session_service = session_service or InMemorySessionService()
 
-    async def generate(self, agent: str):
+    async def generate(self):
         """
         Generate an agent based on the provided agent name.
         """
-        if not agent:
+        if not self.agent:
             raise ValueError("Agent name cannot be empty.")
         await self._init_runner()
         return self

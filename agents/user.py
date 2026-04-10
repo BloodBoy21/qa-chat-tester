@@ -80,6 +80,7 @@ class UserAgent(AgentBase):
     - SIEMPRE ejecuta `send_to_agent` antes de responder. Sin excepciones.
     - Mantén el `session_id` consistente en toda la conversación.
     - Al finalizar, SIEMPRE llama a `AnalysisAgent` antes de devolver JSON vacío.
+    - Cuando detectes que la conversacion tiene un loop termina la conversación y llama a `AnalysisAgent` con el session_id para su análisis, luego responde con JSON vacío.
 
     ## Interaction Flow:
     start → generate message → send_to_agent() → read response →
