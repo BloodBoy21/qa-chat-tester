@@ -78,17 +78,29 @@ async def main():
     await run_agent(context=context, user_id=user_id, model=model)
 
 
-async def run_analysis_agent(agent, run_id: str, user_id: str):
-    log_db = LogDB()
-    runner = AgentRunner(user_id=user_id, agent=agent)
-    await runner.generate()
-    session_id = log_db.get_session_id_by_run_id(run_id)
-    if session_id is None:
-        logger.error(
-            f"No session_id found for run_id {run_id}. Cannot run AnalysisAgent."
-        )
-        return
-    await runner.from_text(session_id)
+async def run_analysis_agent(agent, run_id: str, user_id: str, retries=3):
+    try:
+        log_db = LogDB()
+        runner = AgentRunner(user_id=user_id, agent=agent)
+        await runner.generate()
+        session_id = log_db.get_session_id_by_run_id(run_id)
+        if session_id is None:
+            logger.error(
+                f"No session_id found for run_id {run_id}. Cannot run AnalysisAgent."
+            )
+            return
+        await runner.from_text(session_id)
+        exits_analysis = log_db.insight_exists_by_run_id(run_id)
+        if not exits_analysis:
+            raise Exception("AnalysisAgent did not save any insights.")
+        logger.info(f"AnalysisAgent completed successfully for run_id {run_id}.")
+    except Exception as e:
+        logger.error(f"Error running AnalysisAgent: {e}")
+        if retries > 0:
+            logger.info(f"Retrying AnalysisAgent. Attempts left: {retries}")
+            await run_analysis_agent(agent, run_id, user_id, retries - 1)
+        else:
+            logger.error("Max retries reached for AnalysisAgent. Aborting.")
 
 
 async def run_agent(context: str, user_id: str, model: str, batch=None):
