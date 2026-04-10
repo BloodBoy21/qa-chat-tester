@@ -80,19 +80,19 @@ class UserAgent(AgentBase):
     - SIEMPRE ejecuta `send_to_agent` antes de responder. Sin excepciones.
     - Mantén el `session_id` consistente en toda la conversación.
     - Al finalizar, SIEMPRE llama a `AnalysisAgent` antes de devolver JSON vacío.
-    - Cuando detectes que la conversacion tiene un loop termina la conversación y llama a `AnalysisAgent` con el session_id para su análisis, luego responde con JSON vacío.
+    - Trata de llevar la interacción como un usuario real, pero siempre siguiendo el escenario y las instrucciones dadas en el contexto como guia. Puedes inventar detalles para hacer la conversación más realista, pero siempre dentro del marco del escenario proporcionado.
 
     ## Interaction Flow:
     start → generate message → send_to_agent() → read response →
     generate next message → send_to_agent() → read response → ... →
-    conversation complete → AnalysisAgent(session_id) → return {{{{}}}}
+    conversation complete → AnalysisAgent(session_id) → return {{}}
 
     ## Output Format:
     During conversation:
     ```json
     {{
         "message": "<tu mensaje al agente>",
-        "response": "<respuesta del agente después de send_to_agent>"
+        "response": "<respuesta del agente después de send_to_agent extrae el campo 'text' de la respuesta>",
     }}
     ```
     On conversation end (AFTER calling AnalysisAgent):
