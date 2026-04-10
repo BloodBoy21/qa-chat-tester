@@ -46,8 +46,6 @@ async def run_from_json_file(file_path: str):
         logger.info(
             f"Finished processing batch {i // batch_size + 1} of {total_batches}"
         )
-        logger.info("Waiting 5 seconds before next batch...")
-        await asyncio.sleep(5)  # wait before processing next batch
         logger.info("Starting next batch...")
         logger.info(f"Current time: {datetime.datetime.now().isoformat()}")
         logger.info("-" * 50)
@@ -88,13 +86,8 @@ async def run_agent(context: str, user_id: str, model: str, batch=None):
     conversation_loop = True
     previous_response = None
     try:
+        max_iterations = int(args.get("max_iterations", 30))
         while conversation_loop:
-            if isinstance(previous_response, dict) and "insights" in previous_response:
-                logger.info("Insights received, ending conversation.")
-                break
-            if "insights" in (previous_response or ""):
-                logger.info("Insights keyword found in response, ending conversation.")
-                break
 
             res = await runner.from_text(
                 "start" if previous_response is None else previous_response
@@ -112,6 +105,11 @@ async def run_agent(context: str, user_id: str, model: str, batch=None):
                 conversation_loop = False
                 break
             previous_response = res
+            max_iterations -= 1
+            if max_iterations <= 0:
+                logger.info("Maximum iterations reached.")
+                break
+
     except KeyboardInterrupt:
         logger.info("Conversation interrupted by user.")
     except Exception as e:

@@ -72,7 +72,6 @@ def send_to_agent(
         "session_backend": session_backend,
         "persist_session": persist_session,
     }
-    logger.info(f"Sending message to agent, data: {data}")
     response = r.post(
         url=f"{SERVICE_URL}/chat",
         json=data,
@@ -82,7 +81,6 @@ def send_to_agent(
     )
     response = response.json()
     response = clean_response(response)
-    logger.info(f"Received response from agent: {response}")
     save_interaction(
         message=message,
         answer=response,
@@ -109,9 +107,6 @@ def save_interaction(
     Returns:
         None
     """
-    logger.info(
-        f"Saving interaction, message: {message}, answer: {answer}, user_id: {user_id}"
-    )
     try:
         log_db = LogDB()
         log_db.add(
@@ -160,6 +155,7 @@ def save_analysis(analysis: str, session_id: str, *args, **kwargs) -> Dict[str, 
             analysis=analysis_dict.get("insights", ""),
             complete=analysis_dict.get("complete", "false").lower() == "true",
         )
+        logger.info("Analysis saved successfully.")
         return {"status": "success", "message": "Analysis saved successfully."}
     except Exception as e:
         logger.error(f"Error saving analysis: {e}")
