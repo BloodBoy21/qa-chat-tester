@@ -11,6 +11,7 @@ from typing import Dict
 load_dotenv()
 
 SERVICE_URL = os.getenv("AGENT_URL", "")
+REQUEST_TIMEOUT = int(os.getenv("REQUEST_TIMEOUT", "120"))
 
 
 def _generate_token() -> str:
@@ -81,6 +82,7 @@ def send_to_agent(
         headers={
             "Authorization": f"Bearer {_generate_token()}",
         },
+        timeout=REQUEST_TIMEOUT,
     )
     response = response.json()
     response = clean_response(response)
