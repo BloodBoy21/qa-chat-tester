@@ -8,18 +8,56 @@ from utils.agent_runner import Agent as AgentRunner
 from agents.analysis import AnalysisAgent
 import asyncio
 from utils.prompt_utils import extract_json_blocks
+import json
 
 MODEL_NAME = os.getenv("MODEL_NAME", "gemini-2.5-flash")
 args = dict(arg.split("=", 1) for arg in sys.argv[1:] if "=" in arg)
+
+
+async def run_from_json_file(file_path: str):
+    data = []
+    batch_size = int(args.get("batch_size", 10))
+    try:
+        with open(file_path, "r") as f:
+            data = json.load(f)
+    except Exception as e:
+        logger.error(f"Failed to read JSON file: {e}")
+        return "Error reading JSON file."
+    if not isinstance(data, list):
+        logger.error("JSON file must contain a list of conversation turns.")
+        return "JSON file must contain a list of conversation turns."
+    total_batches = (len(data) + batch_size - 1) // batch_size
+    for i in range(0, len(data), batch_size):
+        batch = data[i : i + batch_size]
+        logger.info(f"Processing batch {i // batch_size + 1} of {total_batches}")
+
+        tasks = [
+            run_agent(
+                context=turn,
+                user_id=turn.get("user_id", "default_user"),
+                model=turn.get("model", MODEL_NAME),
+            )
+            for turn in batch
+        ]
+        await asyncio.gather(*tasks, return_exceptions=True)
+
+    logger.info("Finished processing all batches.")
 
 
 async def main():
     context = args.get("context", "No context provided.")
     user_id = args.get("user_id", "default_user")
     model = args.get("model", MODEL_NAME)
+    json_file_path = args.get("json_file")
+    if json_file_path:
+        return await run_from_json_file(json_file_path)
     logger.info(
         f"Starting agent with context: {context}, user_id: {user_id}, model: {model}"
     )
+    await run_agent(context=context, user_id=user_id, model=model)
+
+
+async def run_agent(context: str, user_id: str, model: str):
     analysis_agent = AnalysisAgent(context=context, user_id=user_id, model=model)
     user_agent = UserAgent(
         context=context,
