@@ -40,6 +40,7 @@ class LogDB:
                 insight_id   INTEGER PRIMARY KEY AUTOINCREMENT,
                 session_id   TEXT NOT NULL,
                 analysis     TEXT,
+                complete     INTEGER NOT NULL DEFAULT 0,
                 created_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
                 updated_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
             );
@@ -134,43 +135,55 @@ class LogDB:
 
     # ── insights ──
 
-    def add_insight(self, session_id, analysis):
+    def add_insight(self, session_id, analysis, complete=False):
         now = self._now()
         cursor = self._conn.execute(
             """
-            INSERT INTO insights (session_id, analysis, created_at, updated_at)
-            VALUES (?, ?, ?, ?)
+            INSERT INTO insights (session_id, analysis, complete, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?)
             """,
-            (session_id, analysis, now, now),
+            (session_id, analysis, 1 if complete else 0, now, now),
         )
         self._conn.commit()
         return cursor.lastrowid
+
+    def _row_to_insight(self, row):
+        if not row:
+            return None
+        data = dict(row)
+        data["complete"] = bool(data["complete"])
+        return data
 
     def get_insight(self, insight_id):
         row = self._conn.execute(
             "SELECT * FROM insights WHERE insight_id = ?", (insight_id,)
         ).fetchone()
-        return dict(row) if row else None
+        return self._row_to_insight(row)
 
     def get_insight_by_session(self, session_id):
         row = self._conn.execute(
             "SELECT * FROM insights WHERE session_id = ? ORDER BY created_at DESC LIMIT 1",
             (session_id,),
         ).fetchone()
-        return dict(row) if row else None
+        return self._row_to_insight(row)
 
     def get_insights_by_session(self, session_id):
         rows = self._conn.execute(
             "SELECT * FROM insights WHERE session_id = ? ORDER BY created_at",
             (session_id,),
         ).fetchall()
-        return [dict(r) for r in rows]
+        return [self._row_to_insight(r) for r in rows]
 
-    def update_insight(self, insight_id, analysis):
-        self._conn.execute(
-            "UPDATE insights SET analysis = ? WHERE insight_id = ?",
-            (analysis, insight_id),
-        )
+    def update_insight(self, insight_id, **fields):
+        allowed = {"analysis", "complete"}
+        to_update = {k: v for k, v in fields.items() if k in allowed}
+        if not to_update:
+            return
+        if "complete" in to_update:
+            to_update["complete"] = 1 if to_update["complete"] else 0
+        sets = ", ".join(f"{k} = ?" for k in to_update)
+        vals = list(to_update.values()) + [insight_id]
+        self._conn.execute(f"UPDATE insights SET {sets} WHERE insight_id = ?", vals)
         self._conn.commit()
 
     def delete_insight(self, insight_id):

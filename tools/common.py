@@ -158,6 +158,7 @@ def save_analysis(analysis: str, session_id: str, *args, **kwargs) -> Dict[str, 
         log_db.add_insight(
             session_id=session_id,
             analysis=analysis_dict.get("insights", ""),
+            complete=analysis_dict.get("complete", "false").lower() == "true",
         )
         return {"status": "success", "message": "Analysis saved successfully."}
     except Exception as e:

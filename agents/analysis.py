@@ -44,6 +44,8 @@ class AnalysisAgent(AgentBase):
          
          Debes usar el contexto proporcionado para entender el escenario de la conversación y proporcionar insights específicos y accionables basados en ese contexto.
          
+         Debes usar la propiedad 'analysisPrompt' para el 
+         
          El input proporcionado es el id de la conversacion a analizar, debes usar la tool 'get_messages_by_session_id' para obtener los mensajes de la conversación y basar tu análisis en esos mensajes.
          
          Una vez tengas el analisis llama a la tool `save_analysis` para guardar el analisis realizado, esta tool recibe un string con el analisis detallado realizado.
@@ -55,6 +57,7 @@ class AnalysisAgent(AgentBase):
          ```json
          {{
              "insights": "Un análisis detallado de la conversación, incluyendo patrones de comportamiento del usuario, efectividad del agente de IA, áreas de mejora y cualquier otro insight relevante basado en el contexto proporcionado.",
+             "complete": "true o false para saber si la conversacion fue completada con exito de acuerdo a los criterios del contexto"
              }}
         ```
         Recuerda que siempre se debe ejecutar la tool `save_analysis` con el análisis realizado para guardar el resultado del análisis si es exitoso, si no se puede realizar el análisis se guarda con un mensaje indicando que no se pudo realizar el análisis.
