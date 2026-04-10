@@ -71,7 +71,7 @@ class AnalysisAgent(AgentBase):
     ```json
     {{{{
         "insights": "<análisis detallado o razón de fallo — NUNCA vacío>",
-        "complete": <true | false>
+        "complete": <true | false> // si la conversación cumplió su objetivo según tu análisis
     }}}}
     ```
 
@@ -79,6 +79,7 @@ class AnalysisAgent(AgentBase):
     - Steps 1 y 3 son OBLIGATORIOS. No hay escenario válido donde se omitan.
     - "insights" NUNCA puede ser string vacío.
     - Si no puedes analizar → "complete": false + explicación en "insights".
+    - Siempre la respuesta final debe seguir el formato JSON EXACTO del Step 5, sin excepciones. 'insights' debe contener un análisis detallado basado en los mensajes, o una explicación clara de por qué no se pudo obtener un análisis (ej. error, falta de datos) y 'complete' debe reflejar si se cumplió el objetivo de la conversación según tu análisis. Estos nunca pueden ser omitidos o dejados vacíos en la respuesta.
 
     RECUERDA QUE DEBES RESPONDER SIEMPRE CON EL JSON INDICADO EN EL STEP 5, PERO SOLO DESPUÉS DE HABER EJECUTADO LA TOOL `save_analysis`. NUNCA RESPONDAS ANTES DE HABER GUARDADO EL ANÁLISIS, INCLUSO SI EL ANÁLISIS ES QUE NO SE OBTUVIERON MENSAJES O HUBO UN ERROR. SI NO PUEDES OBTENER LOS MENSAJES, TU RESPUESTA DEBE EXPLICAR EL PROBLEMA Y DEBE INDICAR QUE LA CONVERSACIÓN NO SE COMPLETÓ, PERO DEBES ASEGURARTE DE GUARDAR ESTA INFORMACIÓN USANDO LA TOOL `save_analysis` ANTES DE RESPONDER CON EL JSON.
     
