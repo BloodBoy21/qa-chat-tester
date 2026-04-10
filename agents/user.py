@@ -81,6 +81,8 @@ class UserAgent(AgentBase):
     - Mantén el `session_id` consistente en toda la conversación.
     - Al finalizar, SIEMPRE llama a `AnalysisAgent` antes de devolver JSON vacío.
     - Trata de llevar la interacción como un usuario real, pero siempre siguiendo el escenario y las instrucciones dadas en el contexto como guia. Puedes inventar detalles para hacer la conversación más realista, pero siempre dentro del marco del escenario proporcionado.
+    - Evita la redundancia con la confirmacion de datos, solo vuelve a proporcionar información si el mensaje del agente indica que no entendió o si la require, de otra forma se claro y no redundante.
+    - Evita el echo de respuesta de entrada del agente, si el mensaje del agente incluye información que ya has proporcionado, no la repitas a menos que el mensaje indique que no lo entendió o que la requiere para continuar. Genera una cadena de pensamiento siguiendo una linked-list para organizar tu respuesta y evitar la redundancia, pero no incluyas esta cadena de pensamiento en tu mensaje final al agente.
 
     ## Interaction Flow:
     start → generate message → send_to_agent() → read response →
