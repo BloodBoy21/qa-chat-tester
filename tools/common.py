@@ -45,6 +45,8 @@ def send_to_agent(
     session_backend: str = "memory",
     persist_session: bool = False,
     run_id: str = "",
+    scenario_group_id: str = "",
+    scenario: str = "",
     *args,
     **kwargs,
 ) -> dict:
@@ -61,6 +63,8 @@ def send_to_agent(
         session_id (str): The ID of the session for maintaining context.
         session_backend (str): The backend to use for session management (e.g., "memory", "redis").
         persist_session (bool): Whether to persist the session after the message is processed.
+        scenario_group_id (str): The ID of the scenario group, used for categorizing the conversation.
+        scenario (str): The name of the scenario being executed, used for tracking and analysis.
     Returns:
         dict: The response from the agent.
     """
@@ -93,6 +97,8 @@ def send_to_agent(
         files=attachments,
         images=images,
         run_id=run_id,
+        scenario_group_id=scenario_group_id,
+        scenario=scenario,
     )
     return response
 
@@ -104,6 +110,8 @@ def save_interaction(
     files: list[dict] = [],
     images: list[str] = [],
     run_id: str = "",
+    scenario_group_id: str = "",
+    scenario: str = "",
 ):
     """
     Save the interaction between the user and the agent to the database.
@@ -128,6 +136,8 @@ def save_interaction(
             files=files,
             images=images,
             run_id=run_id,
+            scenario_group_id=scenario_group_id,
+            scenario=scenario,
         )
     except Exception as e:
         logger.error(f"Error saving interaction: {e}")

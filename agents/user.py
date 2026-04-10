@@ -54,6 +54,8 @@ class UserAgent(AgentBase):
     2. **ALWAYS call `send_to_agent`** con tu mensaje redactado.
     - NUNCA respondas sin antes ejecutar esta tool.
     - Guarda el `session_id` de la respuesta para todas las interacciones siguientes.
+    - Extrae el campo 'ScenarioGroupId' mapealo como 'scenario_group_id' y guárdalo para usarlo en cada llamada a `send_to_agent` en esta conversación.
+    - Extrae el campo 'scenario_id' mapealo como 'scenario' y guárdalo para usarlo en cada llamada a `send_to_agent` en esta conversación.
 
     3. **Evalúa** si la conversación cumplió su objetivo según el contexto.
     - Si NO ha terminado → responde con el JSON de mensaje/response.

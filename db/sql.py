@@ -27,6 +27,8 @@ class LogDB:
                 user_id      TEXT,
                 session_id   TEXT,
                 run_id       TEXT,
+                scenario_group_id TEXT,
+                scenario     TEXT,
                 created_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
                 updated_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
             );
@@ -70,12 +72,14 @@ class LogDB:
         files=None,
         images=None,
         run_id=None,
+        scenario_group_id=None,
+        scenario=None,
     ):
         now = self._now()
         cursor = self._conn.execute(
             """
-            INSERT INTO logs (message, response, raw_response, files, images, user_id, session_id, run_id, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO logs (message, response, raw_response, files, images, user_id, session_id, run_id, scenario_group_id, scenario, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 message,
@@ -86,6 +90,8 @@ class LogDB:
                 user_id,
                 session_id,
                 run_id,
+                scenario_group_id,
+                scenario,
                 now,
                 now,
             ),
@@ -129,6 +135,8 @@ class LogDB:
             "user_id",
             "session_id",
             "run_id",
+            "scenario_group_id",
+            "scenario",
         }
         to_update = {k: v for k, v in fields.items() if k in allowed}
         if not to_update:
