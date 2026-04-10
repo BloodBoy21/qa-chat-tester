@@ -29,16 +29,15 @@ class Agent:
     async def from_text(self, text: str):
         """
         Send a user message to the agent and handle streamed responses.
-        Supports both text and function calls.
+        Supports both text and function calls. Waits for the final response
+        even if intermediate events (tool calls/responses) have no text.
         """
-        # if not text:
-        #    logger.error("Text cannot be empty.")
-        #   return None
-        #
         message_content = types.Content(
             parts=[types.Part.from_text(text=text)],
             role="user",
         )
+        collected_text = ""
+        final_response_seen = False
 
         try:
             # pyrefly: ignore [missing-attribute]
@@ -48,26 +47,38 @@ class Agent:
                 session_id=self.session.id,
             )
 
-            collected_text = ""
             async for event in events:
-                if not event.content or not event.content.parts:
-                    logger.warning("Event has no content or parts.")
-                    continue
+                logger.debug(
+                    f"Event received: author={getattr(event, 'author', None)}, "
+                    f"final={event.is_final_response()}, "
+                    f"has_content={bool(event.content)}"
+                )
 
-                for part in event.content.parts:
-                    if part.function_call:
-                        logger.info(f"Function call detected: {part.function_call}")
-                        continue
-
-                    if part.text:
-                        logger.debug(f"Text part received: {part.text}")
-                        collected_text += part.text
+                if event.content and event.content.parts:
+                    for part in event.content.parts:
+                        if part.function_call:
+                            logger.info(
+                                f"Function call: {part.function_call.name} "
+                                f"args={part.function_call.args}"
+                            )
+                            continue
+                        if part.function_response:
+                            logger.info(
+                                f"Function response: {part.function_response.name}"
+                            )
+                            continue
+                        if part.text:
+                            logger.debug(f"Text part received: {part.text}")
+                            collected_text += part.text
 
                 if event.is_final_response():
                     logger.info("Final response received.")
-                    return collected_text.strip() if collected_text else None
+                    final_response_seen = True
+                    break
 
-            logger.warning("Stream ended without final response.")
+            if not final_response_seen:
+                logger.warning("Stream ended without a final response event.")
+
             return collected_text.strip() if collected_text else None
 
         except Exception as e:
