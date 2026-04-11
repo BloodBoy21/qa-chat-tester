@@ -33,6 +33,8 @@ RUN_TIMEOUT = int(os.getenv("RUN_TIMEOUT", 600))
 # Timeout per individual analysis attempt (seconds).
 ANALYSIS_TIMEOUT = int(os.getenv("ANALYSIS_TIMEOUT", 120))
 
+MAX_CHAT_ITERATIONS = int(os.getenv("MAX_CHAT_ITERATIONS", 20))
+
 
 # ── CLI args ─────────────────────────────────────────────────────────────────
 
@@ -138,19 +140,20 @@ async def run_analysis_agent_manual(
 
 
 # ── Core agent run ─────────────────────────────────────────────────────────────
+def generate_run_id():
+    return str(uuid.uuid4())
 
 
 async def run_agent(
     context: str,
     user_id: str,
     model: str,
-    max_iterations: int = 30,
-    batch: int = None,
+    batch=None,
     item_index: int = None,
     total_items: int = None,
 ):
     log_db = LogDB()
-    run_id = str(uuid.uuid4())
+    run_id = generate_run_id()
     item_label = (
         f"[Batch {batch} | Item {item_index + 1}/{total_items}]"
         if item_index is not None
@@ -163,7 +166,6 @@ async def run_agent(
     analysis_agent = AnalysisAgent(context=context, user_id=user_id, model=model)
     analysis_agent.set_run_id(run_id)
     analysis_agent = analysis_agent.Build()
-
     user_agent = UserAgent(
         context=context,
         user_id=user_id,
@@ -172,40 +174,20 @@ async def run_agent(
     )
     user_agent.set_run_id(run_id)
     agent = user_agent.Build()
-
     runner = AgentRunner(user_id=user_id, agent=agent)
     await runner.generate()
-
+    conversation_loop = True
     previous_response = None
     iteration_count = 0
-    run_deadline = item_start + datetime.timedelta(seconds=RUN_TIMEOUT)
-
     try:
-        for iteration_count in range(1, max_iterations + 1):
-            # Check total run deadline before starting a new iteration
-            remaining = (run_deadline - datetime.datetime.now()).total_seconds()
-            if remaining <= 0:
-                logger.warning(
-                    f"{item_label} Run timeout ({RUN_TIMEOUT}s) reached at iteration "
-                    f"{iteration_count}. Stopping conversation."
-                )
-                break
-
+        max_iterations = int(MAX_CHAT_ITERATIONS)
+        while conversation_loop:
+            iteration_count += 1
             iter_start = datetime.datetime.now()
 
-            try:
-                res = await asyncio.wait_for(
-                    runner.from_text(
-                        "start" if previous_response is None else previous_response
-                    ),
-                    timeout=min(ITERATION_TIMEOUT, remaining),
-                )
-            except asyncio.TimeoutError:
-                logger.warning(
-                    f"{item_label} Iteration {iteration_count} timed out after "
-                    f"{ITERATION_TIMEOUT}s. Stopping conversation."
-                )
-                break
+            res = await runner.from_text(
+                "start" if previous_response is None else previous_response
+            )
 
             iter_elapsed = (datetime.datetime.now() - iter_start).total_seconds()
             logger.debug(
@@ -213,31 +195,38 @@ async def run_agent(
                 f"Duration: {fmt_duration(iter_elapsed)}"
             )
 
-            if not res or res.strip() in ("", "{}"):
+            if res is None or res.strip() == "" or res.strip() == "{}":
                 logger.error(
                     f"{item_label} No response at iteration {iteration_count}."
                 )
                 break
-
             res_json = extract_json_blocks(res)
-            if res_json.get("conversation_end") or res_json.get("insights"):
+            if (
+                res_json.get("conversation_end", False)
+                or res_json.get("insights")
+                or "insights" in res
+            ):
                 logger.info(
                     f"{item_label} Conversation ended by agent at iteration {iteration_count}."
                 )
+                conversation_loop = False
                 break
-
             previous_response = res
-        else:
-            logger.info(
-                f"{item_label} Max iterations reached ({max_iterations} total)."
-            )
+            max_iterations -= 1
+            if max_iterations <= 0:
+                logger.info(
+                    f"{item_label} Max iterations reached ({iteration_count} total)."
+                )
+                break
+            pass  # no delay needed; each LLM call already takes several seconds
 
     except KeyboardInterrupt:
         logger.info(f"{item_label} Interrupted by user.")
     except Exception as e:
         logger.error(f"{item_label} Error at iteration {iteration_count}: {e}")
     finally:
-        if not log_db.insight_exists_by_run_id(run_id):
+        has_analysis = log_db.insight_exists_by_run_id(run_id)
+        if not has_analysis:
             logger.warning(
                 f"{item_label} No analysis for run_id {run_id}. Running AnalysisAgent fallback."
             )
@@ -300,7 +289,6 @@ async def run_from_json_file(
                 context=turn,
                 user_id=turn.get("user_id", "default_user"),
                 model=turn.get("model", DEFAULT_MODEL),
-                max_iterations=max_iterations,
                 batch=batch_num,
                 item_index=i + idx,
                 total_items=total_items,
@@ -370,7 +358,8 @@ async def main():
     json_file_path = cli.get("json_file")
     if json_file_path:
         await run_from_json_file(
-            json_file_path, batch_size=batch_size, max_iterations=max_iterations
+            json_file_path,
+            batch_size=batch_size,
         )
         return
 
@@ -380,7 +369,9 @@ async def main():
         f"Starting agent | context={context} | user_id={user_id} | model={model}"
     )
     await run_agent(
-        context=context, user_id=user_id, model=model, max_iterations=max_iterations
+        context=context,
+        user_id=user_id,
+        model=model,
     )
 
 
