@@ -118,6 +118,13 @@ class LogDB:
             ).fetchall()
         return [dict(r) for r in rows]
 
+    def get_by_run_id(self, run_id):
+        rows = self._conn.execute(
+            "SELECT * FROM logs WHERE run_id = ? ORDER BY created_at",
+            (run_id,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
     def get_by_user(self, user_id, limit=50):
         rows = self._conn.execute(
             "SELECT * FROM logs WHERE user_id = ? ORDER BY created_at DESC LIMIT ?",

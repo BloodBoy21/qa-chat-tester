@@ -5,13 +5,14 @@ from agents.user import UserAgent
 from loguru import logger
 import os
 from utils.agent_runner import Agent as AgentRunner
-from agents.analysis import AnalysisAgent
+from agents.analysis import AnalysisAgent, AnalysisAgentManual
 import asyncio
 from utils.prompt_utils import extract_json_blocks
 import json
 import datetime
 import uuid
 from db.sql import LogDB
+from tools.common import save_analysis
 
 MAX_ANALYSIS_RETRIES = int(os.getenv("MAX_ANALYSIS_RETRIES", 5))
 MODEL_NAME = os.getenv("MODEL_NAME", "gemini-2.5-flash")
@@ -156,7 +157,7 @@ async def main():
 
 
 async def run_analysis_agent(
-    agent, run_id: str, user_id: str, retries=MAX_ANALYSIS_RETRIES
+    agent, run_id: str, user_id: str, context: str, retries=MAX_ANALYSIS_RETRIES
 ):
     try:
         log_db = LogDB()
@@ -178,9 +179,41 @@ async def run_analysis_agent(
         logger.error(f"Error running AnalysisAgent: {e}")
         if retries > 0:
             logger.info(f"Retrying AnalysisAgent. Attempts left: {retries}")
-            await run_analysis_agent(agent, run_id, user_id, retries - 1)
+            await run_analysis_agent(agent, run_id, user_id, context, retries - 1)
         else:
             logger.error("Max retries reached for AnalysisAgent. Aborting.")
+            return await run_analysis_agent_manual(
+                run_id, context, user_id, agent.model
+            )
+
+
+async def run_analysis_agent_manual(
+    run_id: str, context: str, user_id: str, model: str
+):
+    try:
+        logger.info(
+            f"Running AnalysisAgent manual fallback for user_id={user_id}, model={model}"
+        )
+        log_db = LogDB()
+        analysis_agent = AnalysisAgentManual(
+            context=context, user_id=user_id, model=model
+        )
+        runner = AgentRunner(user_id=user_id, agent=analysis_agent)
+        await runner.generate()
+        messages = log_db.get_by_run_id(run_id)
+        res = await runner.from_text(json.dumps(messages))
+        logger.debug(f"Manual AnalysisAgent response: {res}")
+        session_id = log_db.get_session_id_by_run_id(run_id)
+        if session_id is None:
+            logger.error(
+                f"No session_id found for run_id {run_id}. Cannot save analysis results."
+            )
+            return
+        save_analysis(session_id=session_id, analysis=res, run_id=run_id)
+        logger.info(f"Manual AnalysisAgent completed for run_id {run_id}.")
+    except Exception as e:
+        logger.error(f"Error in manual AnalysisAgent fallback: {e}")
+        logger.error("Manual AnalysisAgent failed. No further retries.")
 
 
 async def run_agent(
@@ -271,7 +304,7 @@ async def run_agent(
             logger.warning(
                 f"{item_label} No analysis for run_id {run_id}. Running AnalysisAgent fallback."
             )
-            await run_analysis_agent(analysis_agent, run_id, user_id)
+            await run_analysis_agent(analysis_agent, run_id, user_id, context)
 
         item_elapsed = (datetime.datetime.now() - item_start).total_seconds()
         logger.info(

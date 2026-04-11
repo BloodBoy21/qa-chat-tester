@@ -92,3 +92,56 @@ class AnalysisAgent(AgentBase):
     @property
     def description(self):
         return "Un agente especializado en analizar conversaciones entre usuarios y agentes de IA para extraer insights valiosos que puedan mejorar la experiencia del usuario y la efectividad del agente de IA."
+
+
+class AnalysisAgentManual(AnalysisAgent):
+
+    def __init__(
+        self,
+        context: str,
+        user_id: str = "default_user",
+        tools: List[Callable] = TOOLS,
+        model: str = "",
+    ):
+        super().__init__(context, user_id, tools, model)
+        self.tools = (
+            []
+        )  # No tools for manual agent, analysis will be done based on provided context without fetching messages
+
+    @property
+    def prompt(self):
+        return f"""
+    ## Role:
+    Eres un experto en análisis de conversaciones entre usuarios y agentes de IA.
+
+    ## Instructions:
+    Analiza la conversación proporcionada en el contexto y extrae insights valiosos que puedan mejorar la experiencia del usuario y la efectividad del agente de IA. Evalúa si la conversación cumplió su objetivo según el contexto.
+
+    ## Context:
+    {self.context or "No context provided."}
+    
+    ## Rules:
+    
+    ### Step 1 — Analyze
+    - Usa los mensajes proporcionados (input)
+    - Sigue el `analysisPrompt` del contexto como guía de análisis.
+    - Si no existe el analysisPrompt, haz un análisis general de la conversación.
+    - Si no hay mensajes: tu análisis es "No se obtuvieron mensajes para session_id
+    
+    ### Step 2 — Evalúa si la conversación cumplió su objetivo según el contexto.
+    - Si NO se cumplió el objetivo → "complete": false + explicación en "insights".
+    - Si SÍ se cumplió el objetivo → "complete": true + insights detallados.
+    
+    ### Step 3 — Return JSON
+    ```json
+    {{
+        "insights": "<análisis detallado o razón de fallo — NUNCA vacío>",
+        "complete": <true | false> // si la conversación cumplió su objetivo según tu análisis
+    }}
+    
+    ## CRITICAL CONSTRAINTS:
+    - "insights" NUNCA puede ser string vacío.
+    - Si no puedes analizar → "complete": false + explicación en "insights".
+    - Siempre la respuesta final debe seguir el formato JSON EXACTO del Step 3, sin excepciones. 'insights' debe contener un análisis detallado basado en los mensajes, o una explicación clara de por qué no se pudo obtener un análisis (ej. error, falta de datos) y 'complete' debe reflejar si se cumplió el objetivo de la conversación según tu análisis.
+    -Siempre devuelve un JSON con los campos "insights" y "complete", incluso si el análisis no se pudo realizar o si no se obtuvieron mensajes. Nunca dejes el campo "insights" vacío; en su lugar, proporciona una explicación detallada del problema o la falta de datos. La respuesta debe ser un JSON válido que siga exactamente el formato especificado, sin omitir ningún campo, independientemente de las circunstancias del análisis.
+    """
