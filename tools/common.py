@@ -32,7 +32,6 @@ def clean_response(response_dict: dict) -> dict:
 
 
 def _http_post(data: dict) -> dict:
-    """Blocking HTTP call, meant to run in a thread pool executor."""
     response = r.post(
         url=f"{SERVICE_URL}/chat",
         json=data,
@@ -93,8 +92,6 @@ def send_to_agent(
         "persist_session": persist_session,
     }
 
-    # Run the blocking HTTP call off the event loop so parallel agents in a
-    # batch don't block each other while waiting for the external service.
     loop = asyncio.get_event_loop()
     if loop.is_running():
         future = _http_executor.submit(_http_post, data)
