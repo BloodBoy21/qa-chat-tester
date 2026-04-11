@@ -1,16 +1,20 @@
 import sqlite3
 import json
+import threading
 from datetime import datetime, timezone
 
 
 class LogDB:
     _instance = None
+    _lock = threading.Lock()
 
     def __new__(cls, db_path="logs.db"):
         if cls._instance is None:
             cls._instance = super().__new__(cls)
-            cls._instance._conn = sqlite3.connect(db_path)
+            cls._instance._conn = sqlite3.connect(db_path, check_same_thread=False)
             cls._instance._conn.row_factory = sqlite3.Row
+            cls._instance._conn.execute("PRAGMA journal_mode=WAL")
+            cls._instance._conn.execute("PRAGMA busy_timeout=5000")
             cls._instance._create_tables()
         return cls._instance
 
@@ -76,27 +80,28 @@ class LogDB:
         scenario=None,
     ):
         now = self._now()
-        cursor = self._conn.execute(
-            """
-            INSERT INTO logs (message, response, raw_response, files, images, user_id, session_id, run_id, scenario_group_id, scenario, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                message,
-                response,
-                json.dumps(raw_response),
-                json.dumps(files) if files is not None else None,
-                json.dumps(images) if images is not None else None,
-                user_id,
-                session_id,
-                run_id,
-                scenario_group_id,
-                scenario,
-                now,
-                now,
-            ),
-        )
-        self._conn.commit()
+        with self._lock:
+            cursor = self._conn.execute(
+                """
+                INSERT INTO logs (message, response, raw_response, files, images, user_id, session_id, run_id, scenario_group_id, scenario, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    message,
+                    response,
+                    json.dumps(raw_response),
+                    json.dumps(files) if files is not None else None,
+                    json.dumps(images) if images is not None else None,
+                    user_id,
+                    session_id,
+                    run_id,
+                    scenario_group_id,
+                    scenario,
+                    now,
+                    now,
+                ),
+            )
+            self._conn.commit()
         return cursor.lastrowid
 
     def get(self, log_id):
@@ -164,14 +169,15 @@ class LogDB:
 
     def add_insight(self, session_id, analysis, complete=False, run_id=None):
         now = self._now()
-        cursor = self._conn.execute(
-            """
-            INSERT INTO insights (session_id, run_id, analysis, complete, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?)
-            """,
-            (session_id, run_id, analysis, 1 if complete else 0, now, now),
-        )
-        self._conn.commit()
+        with self._lock:
+            cursor = self._conn.execute(
+                """
+                INSERT INTO insights (session_id, run_id, analysis, complete, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (session_id, run_id, analysis, 1 if complete else 0, now, now),
+            )
+            self._conn.commit()
         return cursor.lastrowid
 
     def _row_to_insight(self, row):

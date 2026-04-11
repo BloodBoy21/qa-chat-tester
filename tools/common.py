@@ -1,5 +1,3 @@
-from ast import Dict
-
 from dotenv import load_dotenv
 import requests as r
 import os
@@ -7,6 +5,10 @@ from loguru import logger
 import json
 from db.sql import LogDB
 from typing import Dict
+import asyncio
+import concurrent.futures
+
+_http_executor = concurrent.futures.ThreadPoolExecutor(max_workers=20)
 
 load_dotenv()
 
@@ -31,6 +33,19 @@ def clean_response(response_dict: dict):
                 for part in content.get("parts", []):
                     part.pop("thoughtSignature", None)
     return clean
+
+
+def _http_post(data: dict) -> dict:
+    """Blocking HTTP call, meant to run in a thread pool executor."""
+    response = r.post(
+        url=f"{SERVICE_URL}/chat",
+        json=data,
+        headers={
+            "Authorization": f"Bearer {_generate_token()}",
+        },
+        timeout=REQUEST_TIMEOUT,
+    )
+    return response.json()
 
 
 def send_to_agent(
@@ -80,15 +95,17 @@ def send_to_agent(
         "session_backend": session_backend,
         "persist_session": persist_session,
     }
-    response = r.post(
-        url=f"{SERVICE_URL}/chat",
-        json=data,
-        headers={
-            "Authorization": f"Bearer {_generate_token()}",
-        },
-        timeout=REQUEST_TIMEOUT,
-    )
-    response = response.json()
+
+    # Run the blocking HTTP call off the event loop so parallel agents in a
+    # batch don't block each other while waiting for the external service.
+    loop = asyncio.get_event_loop()
+    if loop.is_running():
+        import concurrent.futures as _cf
+        future = _http_executor.submit(_http_post, data)
+        response = future.result()
+    else:
+        response = _http_post(data)
+
     response = clean_response(response)
     save_interaction(
         message=message,

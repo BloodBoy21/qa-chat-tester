@@ -170,7 +170,6 @@ async def run_analysis_agent(
             )
             return
         await runner.from_text(session_id)
-        await asyncio.sleep(5)  # Wait for insights to be saved
         exits_analysis = log_db.insight_exists_by_run_id(run_id)
         if not exits_analysis:
             raise Exception("AnalysisAgent did not save any insights.")
@@ -290,9 +289,7 @@ async def run_agent(
                     f"{item_label} Max iterations reached ({iteration_count} total)."
                 )
                 break
-            await asyncio.sleep(
-                1
-            )  # Small delay between iterations to prevent tight loop
+            pass  # no delay needed; each LLM call already takes several seconds
 
     except KeyboardInterrupt:
         logger.info(f"{item_label} Interrupted by user.")
