@@ -1,26 +1,22 @@
-from dotenv import load_dotenv
-import requests as r
 import os
-from loguru import logger
 import json
-from db.sql import LogDB
-from typing import Dict
 import asyncio
 import concurrent.futures
+from typing import Dict
 
-_http_executor = concurrent.futures.ThreadPoolExecutor(max_workers=20)
+import requests as r
+from loguru import logger
 
-load_dotenv()
+from db.sql import LogDB
 
 SERVICE_URL = os.getenv("AGENT_URL", "")
 REQUEST_TIMEOUT = int(os.getenv("REQUEST_TIMEOUT", "120"))
+_TOKEN = os.getenv("AGENT_TOKEN", "")
+
+_http_executor = concurrent.futures.ThreadPoolExecutor(max_workers=20)
 
 
-def _generate_token() -> str:
-    return os.getenv("AGENT_TOKEN", "")
-
-
-def clean_response(response_dict: dict):
+def clean_response(response_dict: dict) -> dict:
     if isinstance(response_dict, str):
         response_dict = json.loads(response_dict)
 
@@ -40,9 +36,7 @@ def _http_post(data: dict) -> dict:
     response = r.post(
         url=f"{SERVICE_URL}/chat",
         json=data,
-        headers={
-            "Authorization": f"Bearer {_generate_token()}",
-        },
+        headers={"Authorization": f"Bearer {_TOKEN}"},
         timeout=REQUEST_TIMEOUT,
     )
     return response.json()
@@ -53,8 +47,8 @@ def send_to_agent(
     user_id: str = "default_user",
     is_hsm: bool = False,
     hsm_name: str = "",
-    images: list[str] = [],
-    attachments: list[dict[str, str]] = [],
+    images: list = None,
+    attachments: list = None,
     account_id: str = "3057",
     session_id: str = "",
     session_backend: str = "memory",
@@ -72,17 +66,20 @@ def send_to_agent(
         user_id (str): The ID of the user sending the message.
         is_hsm (bool): Whether the message is an HSM (Highly Structured Message).
         hsm_name (str): The name of the HSM template, if applicable.
-        images (list[str]): A list of image URLs to include in the message. e.g ( ["https://example.com/image1.jpg", "https://example.com/image2.jpg"])
-        attachments (list[dict[str, str]]): A list of attachment URLs to include in the message. e.g ( [{ "url": "https://example.com/solicitud_ingreso.pdf", "type": "pdf" }])
+        images (list[str]): A list of image URLs to include in the message.
+        attachments (list[dict[str, str]]): A list of attachment dicts to include.
         account_id (str): The ID of the account associated with the message.
         session_id (str): The ID of the session for maintaining context.
-        session_backend (str): The backend to use for session management (e.g., "memory", "redis").
-        persist_session (bool): Whether to persist the session after the message is processed.
-        scenario_group_id (str): The ID of the scenario group, used for categorizing the conversation.
-        scenario (str): The name of the scenario being executed, used for tracking and analysis.
+        session_backend (str): The backend to use for session management.
+        persist_session (bool): Whether to persist the session after processing.
+        scenario_group_id (str): The ID of the scenario group.
+        scenario (str): The name of the scenario being executed.
     Returns:
         dict: The response from the agent.
     """
+    images = images or []
+    attachments = attachments or []
+
     data = {
         "account_id": account_id,
         "user_id": user_id,
@@ -100,7 +97,6 @@ def send_to_agent(
     # batch don't block each other while waiting for the external service.
     loop = asyncio.get_event_loop()
     if loop.is_running():
-        import concurrent.futures as _cf
         future = _http_executor.submit(_http_post, data)
         response = future.result()
     else:
@@ -124,23 +120,14 @@ def save_interaction(
     message: str,
     answer: dict,
     user_id: str = "default_user",
-    files: list[dict] = [],
-    images: list[str] = [],
+    files: list = None,
+    images: list = None,
     run_id: str = "",
     scenario_group_id: str = "",
     scenario: str = "",
 ):
     """
     Save the interaction between the user and the agent to the database.
-    Args:
-        message (str): The message sent by the user.
-        answer (dict): The response received from the agent full dictionary.
-        user_id (str): The ID of the user involved in the interaction.
-        files (list[dict]): A list of file attachments included in the interaction. Each dict should contain at least a "url" key and optionally a "type" key.
-        images (list[str]): A list of image URLs included in the interaction.
-        run_id (str): The ID of the current run or conversation, used for tracking and associating interactions with specific sessions or analyses.
-    Returns:
-        None
     """
     try:
         log_db = LogDB()
@@ -150,8 +137,8 @@ def save_interaction(
             raw_response=json.dumps(answer),
             response=answer.get("text", ""),
             session_id=answer.get("session_id", ""),
-            files=files,
-            images=images,
+            files=files or [],
+            images=images or [],
             run_id=run_id,
             scenario_group_id=scenario_group_id,
             scenario=scenario,
@@ -168,18 +155,18 @@ def save_analysis(
     Args:
         analysis (str): The analysis data to be saved.
         session_id (str): The ID of the session associated with the analysis.
+        run_id (str): The run ID to associate with the analysis.
     Returns:
         dict: A dictionary indicating the status of the save operation.
     """
     logger.info(f"Saving analysis, session_id: {session_id}, analysis: {analysis}")
+
     analysis_dict = {}
     if isinstance(analysis, str):
         try:
             analysis_dict = json.loads(analysis)
-        except json.JSONDecodeError as e:
-            analysis_dict = {
-                "insights": analysis,
-            }
+        except json.JSONDecodeError:
+            analysis_dict = {"insights": analysis}
     elif isinstance(analysis, dict):
         analysis_dict = analysis
     else:
@@ -188,13 +175,21 @@ def save_analysis(
             "status": "error",
             "message": "Invalid analysis format. Must be a JSON string or a dictionary.",
         }
+
+    # Normalize `complete` regardless of whether the LLM returned a bool or a string
+    complete_val = analysis_dict.get("complete", False)
+    if isinstance(complete_val, bool):
+        complete = complete_val
+    else:
+        complete = str(complete_val).lower() == "true"
+
     try:
         log_db = LogDB()
         log_db.add_insight(
             session_id=session_id,
             run_id=run_id,
             analysis=analysis_dict.get("insights", ""),
-            complete=analysis_dict.get("complete", "false").lower() == "true",
+            complete=complete,
         )
         logger.info("Analysis saved successfully.")
         return {"status": "success", "message": "Analysis saved successfully."}

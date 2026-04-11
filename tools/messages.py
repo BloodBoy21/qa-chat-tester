@@ -1,5 +1,3 @@
-from dotenv import load_dotenv
-import requests as r
 from loguru import logger
 from db.sql import LogDB
 
@@ -11,6 +9,7 @@ def get_messages_by_session_id(
     Get messages from the database by session ID.
     Args:
         session_id (str): The ID of the session to retrieve messages for.
+        run_id (str): The run ID to filter messages.
     Returns:
         list: A list of messages associated with the given session ID.
     """

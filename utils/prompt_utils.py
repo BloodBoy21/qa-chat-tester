@@ -3,14 +3,16 @@ import json
 
 
 def extract_json_blocks(text: str) -> dict:
-    pattern = r"```(?:json)?\s*(\{.*?\})\s*```"
-    matches = re.findall(pattern, text, re.DOTALL)
-
+    """
+    Extract and merge all JSON objects from fenced code blocks in text.
+    Handles nested objects correctly by using json.loads on the full block.
+    """
     merged = {}
-    for match in matches:
+    for block in re.finditer(r"```(?:json)?\s*([\s\S]*?)\s*```", text):
         try:
-            merged.update(json.loads(match))
+            parsed = json.loads(block.group(1))
+            if isinstance(parsed, dict):
+                merged.update(parsed)
         except json.JSONDecodeError:
             continue
-
     return merged

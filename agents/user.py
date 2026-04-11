@@ -13,11 +13,11 @@ class UserAgent(AgentBase):
         self,
         context: str,
         user_id: str = "default_user",
-        tools: List[Callable] = TOOLS,
+        tools: List[Callable] = None,
         model: str = "",
-        sub_agents: List[Any] = [],
+        sub_agents: List[Any] = None,
     ):
-        super().__init__(context, user_id, tools, model, sub_agents)
+        super().__init__(context, user_id, tools or TOOLS, model, sub_agents)
 
     def Build(self):
         return LlmAgent(

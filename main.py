@@ -1,26 +1,56 @@
+# load_dotenv must run before any other import that reads os.getenv at module level
 from dotenv import load_dotenv
 
-import sys
-from agents.user import UserAgent
-from loguru import logger
-import os
-from utils.agent_runner import Agent as AgentRunner
-from agents.analysis import AnalysisAgent, AnalysisAgentManual
+load_dotenv()
+
 import asyncio
-from utils.prompt_utils import extract_json_blocks
-import json
 import datetime
+import json
+import os
+import sys
 import uuid
+
+from loguru import logger
+
+from agents.analysis import AnalysisAgent, AnalysisAgentManual
+from agents.user import UserAgent
 from db.sql import LogDB
 from tools.common import save_analysis
+from utils.agent_runner import Agent as AgentRunner
+from utils.prompt_utils import extract_json_blocks
 
-MAX_ANALYSIS_RETRIES = int(os.getenv("MAX_ANALYSIS_RETRIES", 5))
-MODEL_NAME = os.getenv("MODEL_NAME", "gemini-2.5-flash")
-args = dict(arg.split("=", 1) for arg in sys.argv[1:] if "=" in arg)
+MAX_ANALYSIS_RETRIES = int(os.getenv("MAX_ANALYSIS_RETRIES", 3))
+DEFAULT_MODEL = os.getenv("MODEL_NAME", "gemini-2.5-flash")
+
+# Timeout per individual LLM call (seconds). Prevents a single hung API call
+# from blocking the loop forever.
+ITERATION_TIMEOUT = int(os.getenv("ITERATION_TIMEOUT", 120))
+
+# Maximum total wall-clock time for one full run (conversation + analysis).
+# When exceeded, the current iteration is skipped and analysis runs immediately.
+RUN_TIMEOUT = int(os.getenv("RUN_TIMEOUT", 600))
+
+# Timeout per individual analysis attempt (seconds).
+ANALYSIS_TIMEOUT = int(os.getenv("ANALYSIS_TIMEOUT", 120))
 
 
-def generate_run_id():
-    return str(uuid.uuid4())
+# ── CLI args ─────────────────────────────────────────────────────────────────
+
+
+def _parse_args() -> dict:
+    return dict(arg.split("=", 1) for arg in sys.argv[1:] if "=" in arg)
+
+
+def _validate_env():
+    required = ["AGENT_URL", "AGENT_TOKEN"]
+    missing = [k for k in required if not os.getenv(k)]
+    if missing:
+        raise EnvironmentError(
+            f"Missing required environment variables: {', '.join(missing)}"
+        )
+
+
+# ── Helpers ───────────────────────────────────────────────────────────────────
 
 
 def fmt_duration(seconds: float) -> str:
@@ -40,150 +70,42 @@ def fmt_duration(seconds: float) -> str:
         return f"{hours}h {minutes}m {secs:.0f}s"
 
 
-async def run_from_json_file(file_path: str):
-    data = []
-    batch_size = int(args.get("batch_size", 10))
-    try:
-        with open(file_path, "r") as f:
-            data = json.load(f)
-    except Exception as e:
-        logger.error(f"Failed to read JSON file: {e}")
-        return "Error reading JSON file."
-    if not isinstance(data, list):
-        logger.error("JSON file must contain a list of conversation turns.")
-        return "JSON file must contain a list of conversation turns."
+# ── Analysis agent ─────────────────────────────────────────────────────────────
 
-    total_items = len(data)
-    total_batches = (total_items + batch_size - 1) // batch_size
-    process_start = datetime.datetime.now()
 
-    logger.info("=" * 60)
-    logger.info(f"PROCESS START")
-    logger.info(f"  Total items:  {total_items}")
-    logger.info(f"  Batch size:   {batch_size}")
-    logger.info(f"  Total batches: {total_batches}")
-    logger.info(f"  Started at:   {process_start.isoformat()}")
-    logger.info("=" * 60)
-
-    batch_timings = []
-
-    for i in range(0, total_items, batch_size):
-        batch = data[i : i + batch_size]
-        batch_num = i // batch_size + 1
-        batch_start = datetime.datetime.now()
-
-        logger.info("-" * 60)
-        logger.info(
-            f"BATCH {batch_num}/{total_batches} | "
-            f"Items {i + 1}-{min(i + batch_size, total_items)} of {total_items} | "
-            f"Size: {len(batch)}"
-        )
-
-        tasks = [
-            run_agent(
-                context=turn,
-                user_id=turn.get("user_id", "default_user"),
-                model=turn.get("model", MODEL_NAME),
-                batch=batch_num,
-                item_index=i + idx,
-                total_items=total_items,
+async def run_analysis_agent(agent, run_id: str, user_id: str, context: str):
+    log_db = LogDB()
+    for attempt in range(1, MAX_ANALYSIS_RETRIES + 2):
+        try:
+            runner = AgentRunner(user_id=user_id, agent=agent)
+            await runner.generate()
+            session_id = log_db.get_session_id_by_run_id(run_id)
+            if session_id is None:
+                raise ValueError(
+                    f"No session_id found for run_id {run_id}. Cannot run AnalysisAgent."
+                )
+            await asyncio.wait_for(
+                runner.from_text(session_id), timeout=ANALYSIS_TIMEOUT
             )
-            for idx, turn in enumerate(batch)
-        ]
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-
-        batch_elapsed = (datetime.datetime.now() - batch_start).total_seconds()
-        batch_timings.append(batch_elapsed)
-
-        # Count successes/failures in this batch
-        failures = sum(1 for r in results if isinstance(r, Exception))
-        successes = len(results) - failures
-
-        process_elapsed = (datetime.datetime.now() - process_start).total_seconds()
-        avg_per_batch = process_elapsed / batch_num
-        remaining_batches = total_batches - batch_num
-        eta_seconds = avg_per_batch * remaining_batches
-
-        logger.info(
-            f"BATCH {batch_num}/{total_batches} DONE | "
-            f"Duration: {fmt_duration(batch_elapsed)} | "
-            f"OK: {successes} | FAIL: {failures}"
-        )
-        if remaining_batches > 0:
-            logger.info(
-                f"  Progress: {batch_num}/{total_batches} batches | "
-                f"Elapsed: {fmt_duration(process_elapsed)} | "
-                f"ETA remaining: ~{fmt_duration(eta_seconds)}"
-            )
-
-        for idx, r in enumerate(results):
-            if isinstance(r, Exception):
-                logger.error(f"  Item {i + idx + 1} failed with error: {r}")
-
-    # ── Process summary ─────────────────────────────────────────
-    process_elapsed = (datetime.datetime.now() - process_start).total_seconds()
-
-    logger.info("=" * 60)
-    logger.info(f"PROCESS COMPLETE")
-    logger.info(f"  Total duration:     {fmt_duration(process_elapsed)}")
-    logger.info(f"  Total items:        {total_items}")
-    logger.info(
-        f"  Avg per item:       {fmt_duration(process_elapsed / total_items) if total_items > 0 else 'N/A'}"
-    )
-    logger.info(f"  Total batches:      {total_batches}")
-    if batch_timings:
-        logger.info(f"  Fastest batch:      {fmt_duration(min(batch_timings))}")
-        logger.info(f"  Slowest batch:      {fmt_duration(max(batch_timings))}")
-        logger.info(
-            f"  Avg batch duration: {fmt_duration(sum(batch_timings) / len(batch_timings))}"
-        )
-    logger.info(f"  Finished at:        {datetime.datetime.now().isoformat()}")
-    logger.info("=" * 60)
-
-    return "Batch processing completed."
-
-
-async def main():
-    context = args.get("context", "No context provided.")
-    user_id = args.get("user_id", "default_user")
-    model = args.get("model", MODEL_NAME)
-    json_file_path = args.get("json_file")
-    if json_file_path:
-        return await run_from_json_file(json_file_path)
-    logger.info(
-        f"Starting agent with context: {context}, user_id: {user_id}, model: {model}"
-    )
-    await run_agent(context=context, user_id=user_id, model=model)
-
-
-async def run_analysis_agent(
-    agent, run_id: str, user_id: str, context: str, retries=MAX_ANALYSIS_RETRIES
-):
-    try:
-        log_db = LogDB()
-        runner = AgentRunner(user_id=user_id, agent=agent)
-        await runner.generate()
-        session_id = log_db.get_session_id_by_run_id(run_id)
-        if session_id is None:
-            logger.error(
-                f"No session_id found for run_id {run_id}. Cannot run AnalysisAgent."
-            )
+            if not log_db.insight_exists_by_run_id(run_id):
+                raise RuntimeError("AnalysisAgent did not save any insights.")
+            logger.info(f"AnalysisAgent completed successfully for run_id {run_id}.")
             return
-        await runner.from_text(session_id)
-        exits_analysis = log_db.insight_exists_by_run_id(run_id)
-        if not exits_analysis:
-            raise Exception("AnalysisAgent did not save any insights.")
-        logger.info(f"AnalysisAgent completed successfully for run_id {run_id}.")
-    except Exception as e:
-        logger.error(f"Error running AnalysisAgent: {e}")
-        if retries > 0:
-            logger.info(f"Retrying AnalysisAgent. Attempts left: {retries}")
-            await run_analysis_agent(agent, run_id, user_id, context, retries - 1)
-        else:
-            logger.error("Max retries reached for AnalysisAgent. Aborting.")
-            return await run_analysis_agent_manual(
-                run_id, context, user_id, agent.model
+        except asyncio.TimeoutError:
+            logger.error(
+                f"AnalysisAgent attempt {attempt} timed out after {ANALYSIS_TIMEOUT}s."
             )
+        except Exception as e:
+            logger.error(f"AnalysisAgent attempt {attempt} failed: {e}")
+        if attempt <= MAX_ANALYSIS_RETRIES:
+            logger.info(
+                f"Retrying AnalysisAgent. Attempts left: {MAX_ANALYSIS_RETRIES - attempt + 1}"
+            )
+
+    logger.error(
+        "Max retries reached for AnalysisAgent. Falling back to manual analysis."
+    )
+    await run_analysis_agent_manual(run_id, context, user_id, agent.model)
 
 
 async def run_analysis_agent_manual(
@@ -215,16 +137,20 @@ async def run_analysis_agent_manual(
         logger.error("Manual AnalysisAgent failed. No further retries.")
 
 
+# ── Core agent run ─────────────────────────────────────────────────────────────
+
+
 async def run_agent(
     context: str,
     user_id: str,
     model: str,
-    batch=None,
+    max_iterations: int = 30,
+    batch: int = None,
     item_index: int = None,
     total_items: int = None,
 ):
     log_db = LogDB()
-    run_id = generate_run_id()
+    run_id = str(uuid.uuid4())
     item_label = (
         f"[Batch {batch} | Item {item_index + 1}/{total_items}]"
         if item_index is not None
@@ -237,6 +163,7 @@ async def run_agent(
     analysis_agent = AnalysisAgent(context=context, user_id=user_id, model=model)
     analysis_agent.set_run_id(run_id)
     analysis_agent = analysis_agent.Build()
+
     user_agent = UserAgent(
         context=context,
         user_id=user_id,
@@ -245,20 +172,40 @@ async def run_agent(
     )
     user_agent.set_run_id(run_id)
     agent = user_agent.Build()
+
     runner = AgentRunner(user_id=user_id, agent=agent)
     await runner.generate()
-    conversation_loop = True
+
     previous_response = None
     iteration_count = 0
+    run_deadline = item_start + datetime.timedelta(seconds=RUN_TIMEOUT)
+
     try:
-        max_iterations = int(args.get("max_iterations", 30))
-        while conversation_loop:
-            iteration_count += 1
+        for iteration_count in range(1, max_iterations + 1):
+            # Check total run deadline before starting a new iteration
+            remaining = (run_deadline - datetime.datetime.now()).total_seconds()
+            if remaining <= 0:
+                logger.warning(
+                    f"{item_label} Run timeout ({RUN_TIMEOUT}s) reached at iteration "
+                    f"{iteration_count}. Stopping conversation."
+                )
+                break
+
             iter_start = datetime.datetime.now()
 
-            res = await runner.from_text(
-                "start" if previous_response is None else previous_response
-            )
+            try:
+                res = await asyncio.wait_for(
+                    runner.from_text(
+                        "start" if previous_response is None else previous_response
+                    ),
+                    timeout=min(ITERATION_TIMEOUT, remaining),
+                )
+            except asyncio.TimeoutError:
+                logger.warning(
+                    f"{item_label} Iteration {iteration_count} timed out after "
+                    f"{ITERATION_TIMEOUT}s. Stopping conversation."
+                )
+                break
 
             iter_elapsed = (datetime.datetime.now() - iter_start).total_seconds()
             logger.debug(
@@ -266,38 +213,31 @@ async def run_agent(
                 f"Duration: {fmt_duration(iter_elapsed)}"
             )
 
-            if res is None or res.strip() == "" or res.strip() == "{}":
+            if not res or res.strip() in ("", "{}"):
                 logger.error(
                     f"{item_label} No response at iteration {iteration_count}."
                 )
                 break
+
             res_json = extract_json_blocks(res)
-            if (
-                res_json.get("conversation_end", False)
-                or res_json.get("insights")
-                or "insights" in res
-            ):
+            if res_json.get("conversation_end") or res_json.get("insights"):
                 logger.info(
                     f"{item_label} Conversation ended by agent at iteration {iteration_count}."
                 )
-                conversation_loop = False
                 break
+
             previous_response = res
-            max_iterations -= 1
-            if max_iterations <= 0:
-                logger.info(
-                    f"{item_label} Max iterations reached ({iteration_count} total)."
-                )
-                break
-            pass  # no delay needed; each LLM call already takes several seconds
+        else:
+            logger.info(
+                f"{item_label} Max iterations reached ({max_iterations} total)."
+            )
 
     except KeyboardInterrupt:
         logger.info(f"{item_label} Interrupted by user.")
     except Exception as e:
         logger.error(f"{item_label} Error at iteration {iteration_count}: {e}")
     finally:
-        has_analysis = log_db.insight_exists_by_run_id(run_id)
-        if not has_analysis:
+        if not log_db.insight_exists_by_run_id(run_id):
             logger.warning(
                 f"{item_label} No analysis for run_id {run_id}. Running AnalysisAgent fallback."
             )
@@ -312,6 +252,137 @@ async def run_agent(
         )
 
 
+# ── Batch run ─────────────────────────────────────────────────────────────────
+
+
+async def run_from_json_file(
+    file_path: str, batch_size: int = 10, max_iterations: int = 30
+):
+    try:
+        with open(file_path, "r") as f:
+            data = json.load(f)
+    except Exception as e:
+        logger.error(f"Failed to read JSON file: {e}")
+        return
+
+    if not isinstance(data, list):
+        logger.error("JSON file must contain a list of conversation turns.")
+        return
+
+    total_items = len(data)
+    total_batches = (total_items + batch_size - 1) // batch_size
+    process_start = datetime.datetime.now()
+
+    logger.info("=" * 60)
+    logger.info("PROCESS START")
+    logger.info(f"  Total items:   {total_items}")
+    logger.info(f"  Batch size:    {batch_size}")
+    logger.info(f"  Total batches: {total_batches}")
+    logger.info(f"  Started at:    {process_start.isoformat()}")
+    logger.info("=" * 60)
+
+    batch_timings = []
+
+    for i in range(0, total_items, batch_size):
+        batch = data[i : i + batch_size]
+        batch_num = i // batch_size + 1
+        batch_start = datetime.datetime.now()
+
+        logger.info("-" * 60)
+        logger.info(
+            f"BATCH {batch_num}/{total_batches} | "
+            f"Items {i + 1}-{min(i + batch_size, total_items)} of {total_items} | "
+            f"Size: {len(batch)}"
+        )
+
+        tasks = [
+            run_agent(
+                context=turn,
+                user_id=turn.get("user_id", "default_user"),
+                model=turn.get("model", DEFAULT_MODEL),
+                max_iterations=max_iterations,
+                batch=batch_num,
+                item_index=i + idx,
+                total_items=total_items,
+            )
+            for idx, turn in enumerate(batch)
+        ]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        batch_elapsed = (datetime.datetime.now() - batch_start).total_seconds()
+        batch_timings.append(batch_elapsed)
+
+        failures = sum(1 for r in results if isinstance(r, Exception))
+        successes = len(results) - failures
+
+        process_elapsed = (datetime.datetime.now() - process_start).total_seconds()
+        avg_per_batch = process_elapsed / batch_num
+        remaining_batches = total_batches - batch_num
+        eta_seconds = avg_per_batch * remaining_batches
+
+        logger.info(
+            f"BATCH {batch_num}/{total_batches} DONE | "
+            f"Duration: {fmt_duration(batch_elapsed)} | "
+            f"OK: {successes} | FAIL: {failures}"
+        )
+        if remaining_batches > 0:
+            logger.info(
+                f"  Progress: {batch_num}/{total_batches} batches | "
+                f"Elapsed: {fmt_duration(process_elapsed)} | "
+                f"ETA remaining: ~{fmt_duration(eta_seconds)}"
+            )
+
+        for idx, r in enumerate(results):
+            if isinstance(r, Exception):
+                logger.error(f"  Item {i + idx + 1} failed with error: {r}")
+
+    process_elapsed = (datetime.datetime.now() - process_start).total_seconds()
+
+    logger.info("=" * 60)
+    logger.info("PROCESS COMPLETE")
+    logger.info(f"  Total duration:     {fmt_duration(process_elapsed)}")
+    logger.info(f"  Total items:        {total_items}")
+    logger.info(
+        f"  Avg per item:       {fmt_duration(process_elapsed / total_items) if total_items > 0 else 'N/A'}"
+    )
+    logger.info(f"  Total batches:      {total_batches}")
+    if batch_timings:
+        logger.info(f"  Fastest batch:      {fmt_duration(min(batch_timings))}")
+        logger.info(f"  Slowest batch:      {fmt_duration(max(batch_timings))}")
+        logger.info(
+            f"  Avg batch duration: {fmt_duration(sum(batch_timings) / len(batch_timings))}"
+        )
+    logger.info(f"  Finished at:        {datetime.datetime.now().isoformat()}")
+    logger.info("=" * 60)
+
+
+# ── Entry point ───────────────────────────────────────────────────────────────
+
+
+async def main():
+    _validate_env()
+
+    cli = _parse_args()
+    model = cli.get("model", DEFAULT_MODEL)
+    max_iterations = int(cli.get("max_iterations", 30))
+    batch_size = int(cli.get("batch_size", 10))
+
+    json_file_path = cli.get("json_file")
+    if json_file_path:
+        await run_from_json_file(
+            json_file_path, batch_size=batch_size, max_iterations=max_iterations
+        )
+        return
+
+    context = cli.get("context", "No context provided.")
+    user_id = cli.get("user_id", "default_user")
+    logger.info(
+        f"Starting agent | context={context} | user_id={user_id} | model={model}"
+    )
+    await run_agent(
+        context=context, user_id=user_id, model=model, max_iterations=max_iterations
+    )
+
+
 if __name__ == "__main__":
-    load_dotenv()
     asyncio.run(main())

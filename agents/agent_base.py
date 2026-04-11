@@ -1,13 +1,10 @@
 import os
-from typing import Callable, Dict, Any, List, Union
-from utils.built_in_func import call_built_in
-from loguru import logger
-import uuid
 import functools
 import inspect
-from typing import Callable, get_type_hints
+from typing import Callable, Any, List
+from typing import get_type_hints
 
-MODEL_NAME = os.getenv("MODEL_NAME", "gemini-2.0-flash-exp")
+DEFAULT_MODEL = os.getenv("MODEL_NAME", "gemini-2.5-flash")
 
 
 class AgentBase:
@@ -15,15 +12,15 @@ class AgentBase:
         self,
         context: str,
         user_id: str = "default_user",
-        tools: List[Callable] = [],
-        model: str = MODEL_NAME,
-        sub_agents: List[Any] = [],
+        tools: List[Callable] = None,
+        model: str = DEFAULT_MODEL,
+        sub_agents: List[Any] = None,
     ):
         self.model = model
         self.user_id = user_id
         self.context = context
-        self.tools = tools
-        self.sub_agents = sub_agents
+        self.tools = tools or []
+        self.sub_agents = sub_agents or []
         self.run_id = None
 
     def set_run_id(self, run_id):
@@ -42,7 +39,6 @@ class AgentBase:
         sig = inspect.signature(func)
         hints = get_type_hints(func)
 
-        # Remove fixed params from signature
         new_params = [
             p for name, p in sig.parameters.items() if name not in default_params
         ]
@@ -58,9 +54,3 @@ class AgentBase:
         }
 
         return wrapper
-
-    def _uuid_session_str(self) -> str:
-        """
-        Generate a UUID session string based on the user ID.
-        """
-        return str(uuid.uuid4())
