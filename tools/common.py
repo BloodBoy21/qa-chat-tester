@@ -122,6 +122,7 @@ def send_to_agent(
             run_id=run_id,
             scenario_group_id=scenario_group_id,
             scenario=scenario,
+            campaigns=campaigns,
         )
         return response
     except Exception as e:
@@ -138,6 +139,7 @@ def save_interaction(
     run_id: str = "",
     scenario_group_id: str = "",
     scenario: str = "",
+    campaigns: list = None,
 ):
     """
     Save the interaction between the user and the agent to the database.
@@ -155,6 +157,7 @@ def save_interaction(
             run_id=run_id,
             scenario_group_id=scenario_group_id,
             scenario=scenario,
+            campaigns=campaigns,
         )
     except Exception as e:
         logger.error(f"Error saving interaction: {e}")

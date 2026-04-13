@@ -1,4 +1,5 @@
 import os
+import json
 import functools
 import inspect
 from typing import Callable, Any, List
@@ -42,6 +43,17 @@ class AgentBase:
         self.tools = tools or []
         self.sub_agents = sub_agents or []
         self.run_id = None
+        # Extract campaigns list from context so it can be injected into tool calls
+        self._campaigns = self._extract_campaigns(context)
+
+    @staticmethod
+    def _extract_campaigns(context) -> list:
+        """Extract the campaigns list from the case context (dict or JSON string)."""
+        try:
+            ctx = context if isinstance(context, dict) else json.loads(context)
+            return ctx.get("campaigns", []) or []
+        except Exception:
+            return []
 
     def set_run_id(self, run_id):
         self.run_id = run_id
@@ -59,7 +71,11 @@ class AgentBase:
           - bare `dict`          → `str`          (API rejects additionalProperties)
           - `dict[K, V]`         → `str`          (same reason)
         """
-        default_params = {"user_id": self.user_id, "run_id": self.run_id}
+        default_params = {
+            "user_id": self.user_id,
+            "run_id": self.run_id,
+            "campaigns": self._campaigns,
+        }
 
         sig = inspect.signature(func)
         hints = get_type_hints(func)

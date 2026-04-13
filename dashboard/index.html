@@ -504,7 +504,7 @@ function renderConvPage() {
   el.innerHTML = `<table>
     <thead><tr>
       <th>Session ID</th><th>Run ID</th><th>Escenario</th><th>Usuario</th>
-      <th>Msjs</th><th>Estado</th><th>Objetivo</th><th>Inicio</th>
+      <th>Msjs</th><th>Campaigns</th><th>Estado</th><th>Objetivo</th><th>Inicio</th>
     </tr></thead>
     <tbody>
     ${page.map(r => {
@@ -517,12 +517,17 @@ function renderConvPage() {
         : r.insight_complete === 1
           ? `<span class="chip chip-green">✓ Cumplido</span>`
           : `<span class="chip chip-red">✗ No cumplido</span>`;
+      const camps = Array.isArray(r.campaigns) ? r.campaigns : [];
+      const campHtml = camps.length
+        ? camps.map(c => `<span class="tag" style="color:var(--accent2);border-color:rgba(0,212,170,.3)" title="${escHtml(c.campaign_id||'')}">📣 ${escHtml(c.campaign_name||c.campaign_id||'–')}</span>`).join('')
+        : `<span style="color:var(--muted);font-size:11px">–</span>`;
       return `<tr onclick="openConvDetail('${r.session_id}')">
         <td style="font-family:monospace;font-size:11px" title="${r.session_id}">${r.session_id.slice(0,18)}…</td>
         <td style="font-family:monospace;font-size:11px" title="${r.run_id||''}">${r.run_id ? r.run_id.slice(0,12)+'…' : '–'}</td>
         <td title="${r.scenario||''}">${r.scenario_group_id ? `<span class="badge badge-blue">${r.scenario_group_id}</span>` : '–'}</td>
         <td>${r.user_id||'–'}</td>
         <td><b>${r.message_count}</b></td>
+        <td>${campHtml}</td>
         <td>${estadoBadge}</td>
         <td>${objetivoBadge}</td>
         <td style="color:var(--muted);font-size:11px">${fmtDate(r.started_at)}</td>
@@ -593,6 +598,13 @@ async function loadConvDetail(sid) {
   const savedTop = oldScroll?.scrollTop ?? 0;
 
   const meta = msgs[0] || {};
+  const metaCamps = (() => {
+    try {
+      const c = meta.campaigns;
+      const arr = Array.isArray(c) ? c : (typeof c === 'string' ? JSON.parse(c) : []);
+      return arr;
+    } catch { return []; }
+  })();
   el.innerHTML = `
     <div class="conv-header">
       <span style="font-family:monospace;font-size:11px;color:var(--muted)">${sid}</span>
@@ -600,6 +612,7 @@ async function loadConvDetail(sid) {
       ${meta.scenario ? `<span class="tag">${meta.scenario}</span>` : ''}
       ${meta.user_id ? `<span class="tag">user: ${meta.user_id}</span>` : ''}
       ${meta.run_id ? `<span class="tag" style="font-family:monospace">run: ${meta.run_id.slice(0,12)}…</span>` : ''}
+      ${metaCamps.map(c => `<span class="tag" style="color:var(--accent2);border-color:rgba(0,212,170,.3)" title="ID: ${escHtml(c.campaign_id||'')} | Template: ${escHtml(c.whatsapp_template_name||'')}">📣 ${escHtml(c.campaign_name||c.campaign_id||'–')}</span>`).join('')}
       <span class="badge badge-blue" style="margin-left:auto">${msgs.length} mensajes</span>
     </div>
     <div class="conv-messages" id="msg-scroll">
@@ -842,6 +855,7 @@ function renderAnalysisPage() {
     : '';
 
   wrap.innerHTML = suffix + list.map((a, idx) => {
+    const aCamps = (() => { try { const c = a.campaigns; return Array.isArray(c) ? c : (c ? JSON.parse(c) : []); } catch { return []; } })();
     const cardClass = a.complete === 1 ? 'ok' : a.complete === 0 ? 'fail' : 'pending';
     const objBadge  = a.complete === 1
       ? `<span class="chip chip-green">✓ Objetivo cumplido</span>`
@@ -857,6 +871,7 @@ function renderAnalysisPage() {
         ${a.scenario ? `<span class="tag" title="${a.scenario}">${a.scenario.length>40?a.scenario.slice(0,38)+'…':a.scenario}</span>` : ''}
         ${a.user_id ? `<span class="tag">👤 ${a.user_id}</span>` : ''}
         ${a.message_count ? `<span class="tag">💬 ${a.message_count} msgs</span>` : ''}
+        ${aCamps.map(c => `<span class="tag" style="color:var(--accent2);border-color:rgba(0,212,170,.3)" title="${escHtml(c.campaign_id||'')}">📣 ${escHtml(c.campaign_name||c.campaign_id||'–')}</span>`).join('')}
         <span style="margin-left:auto;font-size:11px;color:var(--muted)">${fmtDate(a.created_at)}</span>
       </div>
       ${objBadge}

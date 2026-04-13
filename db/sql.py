@@ -28,6 +28,7 @@ class LogDB:
                 raw_response TEXT,
                 files        TEXT,
                 images       TEXT,
+                campaigns    TEXT,
                 user_id      TEXT,
                 session_id   TEXT,
                 run_id       TEXT,
@@ -60,6 +61,11 @@ class LogDB:
             END;
         """
         )
+        # migrate: add campaigns column if missing
+        cols = {r[1] for r in self._conn.execute("PRAGMA table_info(logs)").fetchall()}
+        if "campaigns" not in cols:
+            self._conn.execute("ALTER TABLE logs ADD COLUMN campaigns TEXT")
+            self._conn.commit()
 
     def _now(self):
         return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -75,6 +81,7 @@ class LogDB:
         session_id,
         files=None,
         images=None,
+        campaigns=None,
         run_id=None,
         scenario_group_id=None,
         scenario=None,
@@ -83,8 +90,8 @@ class LogDB:
         with self._lock:
             cursor = self._conn.execute(
                 """
-                INSERT INTO logs (message, response, raw_response, files, images, user_id, session_id, run_id, scenario_group_id, scenario, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO logs (message, response, raw_response, files, images, campaigns, user_id, session_id, run_id, scenario_group_id, scenario, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     message,
@@ -92,6 +99,7 @@ class LogDB:
                     json.dumps(raw_response),
                     json.dumps(files) if files is not None else None,
                     json.dumps(images) if images is not None else None,
+                    json.dumps(campaigns) if campaigns is not None else None,
                     user_id,
                     session_id,
                     run_id,
@@ -144,6 +152,7 @@ class LogDB:
             "raw_response",
             "files",
             "images",
+            "campaigns",
             "user_id",
             "session_id",
             "run_id",
@@ -153,7 +162,7 @@ class LogDB:
         to_update = {k: v for k, v in fields.items() if k in allowed}
         if not to_update:
             return
-        for json_field in ("raw_response", "files", "images"):
+        for json_field in ("raw_response", "files", "images", "campaigns"):
             if json_field in to_update and to_update[json_field] is not None:
                 to_update[json_field] = json.dumps(to_update[json_field])
         sets = ", ".join(f"{k} = ?" for k in to_update)

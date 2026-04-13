@@ -279,7 +279,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 MIN(l.created_at) AS started_at,
                 MAX(l.updated_at) AS last_message_at,
                 i.complete AS insight_complete,
-                i.analysis AS insight_summary
+                i.analysis AS insight_summary,
+                (SELECT campaigns FROM logs
+                 WHERE session_id = l.session_id AND campaigns IS NOT NULL
+                 LIMIT 1) AS campaigns
             FROM logs l
             LEFT JOIN (
                 SELECT session_id, complete, SUBSTR(analysis,1,120) AS analysis
@@ -290,7 +293,18 @@ class Handler(http.server.BaseHTTPRequestHandler):
             ORDER BY last_message_at DESC
         """).fetchall()
         conn.close()
-        self._send_json([dict(r) for r in rows])
+        result = []
+        for r in rows:
+            row = dict(r)
+            if row.get("campaigns"):
+                try:
+                    row["campaigns"] = json.loads(row["campaigns"])
+                except Exception:
+                    row["campaigns"] = []
+            else:
+                row["campaigns"] = []
+            result.append(row)
+        self._send_json(result)
 
     def _list_analyses(self):
         conn = _db()
@@ -303,15 +317,27 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 i.complete,
                 i.created_at,
                 i.updated_at,
-                (SELECT l.user_id          FROM logs l WHERE l.session_id = i.session_id LIMIT 1) AS user_id,
-                (SELECT l.scenario_group_id FROM logs l WHERE l.session_id = i.session_id LIMIT 1) AS scenario_group_id,
-                (SELECT l.scenario          FROM logs l WHERE l.session_id = i.session_id LIMIT 1) AS scenario,
-                (SELECT COUNT(*)            FROM logs l WHERE l.session_id = i.session_id) AS message_count
+                (SELECT l.user_id           FROM logs l WHERE l.session_id = i.session_id LIMIT 1) AS user_id,
+                (SELECT l.scenario_group_id  FROM logs l WHERE l.session_id = i.session_id LIMIT 1) AS scenario_group_id,
+                (SELECT l.scenario           FROM logs l WHERE l.session_id = i.session_id LIMIT 1) AS scenario,
+                (SELECT l.campaigns          FROM logs l WHERE l.session_id = i.session_id AND l.campaigns IS NOT NULL LIMIT 1) AS campaigns,
+                (SELECT COUNT(*)             FROM logs l WHERE l.session_id = i.session_id) AS message_count
             FROM insights i
             ORDER BY i.created_at DESC
         """).fetchall()
         conn.close()
-        self._send_json([dict(r) for r in rows])
+        result = []
+        for r in rows:
+            row = dict(r)
+            if row.get("campaigns"):
+                try:
+                    row["campaigns"] = json.loads(row["campaigns"])
+                except Exception:
+                    row["campaigns"] = []
+            else:
+                row["campaigns"] = []
+            result.append(row)
+        self._send_json(result)
 
     def _get_conversation(self, session_id: str):
         conn = _db()
@@ -349,6 +375,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 l.raw_response,
                 l.files,
                 l.images,
+                l.campaigns,
                 l.user_id,
                 i.analysis,
                 i.complete,
@@ -363,7 +390,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         conn.close()
 
         headers = [
-            "message", "response", "raw_response", "files", "images",
+            "message", "response", "raw_response", "files", "images", "campaigns",
             "user_id", "analysis", "complete", "scenario_group_id", "scenario", "run_id",
         ]
 
@@ -374,10 +401,19 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if col in ("raw_response", "files", "images"):
                 try:
                     parsed = json.loads(val)
-                    # raw_response is double-encoded (json.dumps of a json string)
                     if isinstance(parsed, str):
                         parsed = json.loads(parsed)
                     return json.dumps(parsed, ensure_ascii=False, indent=2)
+                except Exception:
+                    pass
+            if col == "campaigns":
+                try:
+                    camps = json.loads(val)
+                    if isinstance(camps, list):
+                        return ", ".join(
+                            c.get("campaign_name", c.get("campaign_id", str(c)))
+                            for c in camps if isinstance(c, dict)
+                        ) or val
                 except Exception:
                     pass
             return val
