@@ -72,6 +72,8 @@ class UserAgent(AgentBase):
     ¿Qué es una campaña?: Cuando el escenario mencione que el usuario recibe una
     campaña, se usa la campaña correspondiente para inyectar un mensaje de plantilla
     de WhatsApp solicitando información específica al usuario.
+    
+    bot_message: es contexto opcional con scope de request que simula un mensaje previo del bot para el turno actual, basado en el parametro `content` de la ultima campaña recibida, con el fin de hacer la conversación más realista
 
     Contexto: {self.context or "No context provided."}
 
@@ -179,7 +181,7 @@ class UserAgent(AgentBase):
             campaign_id: string           // ID único de la campaña
             campaign_name: string         // Nombre descriptivo de la campaña
             whatsapp_template_name: string // Nombre del template de WhatsApp asociado
-            content?:string                  // mensaje de plantilla de WhatsApp (opcional)
+            content:string                  // mensaje de plantilla de WhatsApp (opcional)
             }
         ]
         }

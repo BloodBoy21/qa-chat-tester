@@ -47,6 +47,7 @@ def send_to_agent(
     images: list = None,
     attachments: list = None,
     campaigns: list = None,
+    bot_message: str = "",
     account_id: str = "3057",
     session_id: str = "",
     session_backend: str = "redis",
@@ -65,6 +66,7 @@ def send_to_agent(
         images (list[str]): A list of image URLs to include in the message.
         attachments (list[dict[str, str]]): A list of attachment dicts to include.
         campaigns (list[dict[str, str]]): A list of campaign dicts to include in the context.
+        bot_message (str): Previous message from the bot to simulate in the current turn if hsm is being used.
         account_id (str): The ID of the account associated with the message.
         session_id (str): The ID of the session for maintaining context.
         session_backend (str): The backend to use for session management.
@@ -90,8 +92,16 @@ def send_to_agent(
             "session_backend": session_backend,
             "persist_session": persist_session,
             "campaigns": campaigns,
+            "bot_message": {
+                "text": bot_message or "",
+                "is_hsm": bool(len(campaigns)) > 0,
+                "hsm_name": (
+                    campaigns[-1]["whatsapp_template_name"]
+                    if len(campaigns) > 0
+                    else ""
+                ),
+            },
         }
-        logger.info(f"Sending message to agent: {data}")
         loop = asyncio.get_event_loop()
         if loop.is_running():
             future = _http_executor.submit(_http_post, data)
@@ -100,6 +110,9 @@ def send_to_agent(
             response = _http_post(data)
 
         response = clean_response(response)
+        logger.info(
+            f"user: {user_id} | session: {session_id} | QA Agent message :{message} | AN response: {response.get('text', '')} | files: {attachments} | images: {images} | campaigns: {campaigns}"
+        )
         save_interaction(
             message=message,
             answer=response,

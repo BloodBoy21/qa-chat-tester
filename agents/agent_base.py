@@ -7,6 +7,26 @@ from typing import get_type_hints
 DEFAULT_MODEL = os.getenv("MODEL_NAME", "gemini-2.5-flash")
 
 
+def _gemini_safe_hint(t):
+    """
+    Normalize a Python type hint so ADK produces a Gemini-compatible JSON Schema.
+
+    Rules:
+      - bare `list`      → `list[str]`  (Gemini requires `items` on every array)
+      - bare `dict`      → `str`        (Gemini rejects `additionalProperties`)
+      - `dict[K, V]`     → `str`        (same — parameterised dicts still emit
+                                          additionalProperties in the schema)
+    Everything else is returned unchanged (str, bool, int, list[str],
+    Pydantic BaseModel subclasses, etc. are all fine as-is).
+    """
+    if t is list:
+        return list[str]
+    origin = getattr(t, "__origin__", None)
+    if t is dict or origin is dict:
+        return str
+    return t
+
+
 class AgentBase:
     def __init__(
         self,
@@ -33,6 +53,11 @@ class AgentBase:
         """
         Build a tool function with fixed default parameters.
         Preserves signature and type hints so ADK generates a valid schema.
+
+        Also normalizes type hints for Gemini API compatibility:
+          - bare `list`          → `list[str]`   (API requires items field in array schema)
+          - bare `dict`          → `str`          (API rejects additionalProperties)
+          - `dict[K, V]`         → `str`          (same reason)
         """
         default_params = {"user_id": self.user_id, "run_id": self.run_id}
 
@@ -50,7 +75,9 @@ class AgentBase:
 
         wrapper.__signature__ = sig.replace(parameters=new_params)
         wrapper.__annotations__ = {
-            k: v for k, v in hints.items() if k not in default_params
+            k: _gemini_safe_hint(v)
+            for k, v in hints.items()
+            if k not in default_params
         }
 
         return wrapper
