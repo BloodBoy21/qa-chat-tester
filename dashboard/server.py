@@ -205,13 +205,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
         path = urlparse(self.path).path
         routes = {
-            "/":                       self._html,
-            "/index.html":             self._html,
-            "/api/stats":              self._stats,
-            "/api/conversations":      self._list_conversations,
-            "/api/cases":              self._get_cases,
-            "/api/run/status":         self._run_status,
-            "/api/run/stream":         self._run_stream,
+            "/":                         self._html,
+            "/index.html":               self._html,
+            "/api/stats":                self._stats,
+            "/api/conversations":        self._list_conversations,
+            "/api/analyses":             self._list_analyses,
+            "/api/cases":                self._get_cases,
+            "/api/run/status":           self._run_status,
+            "/api/run/stream":           self._run_stream,
             "/api/export/conversations": self._export_conversations,
         }
         if path in routes:
@@ -287,6 +288,27 @@ class Handler(http.server.BaseHTTPRequestHandler):
             ) i ON i.session_id = l.session_id
             GROUP BY l.session_id
             ORDER BY last_message_at DESC
+        """).fetchall()
+        conn.close()
+        self._send_json([dict(r) for r in rows])
+
+    def _list_analyses(self):
+        conn = _db()
+        rows = conn.execute("""
+            SELECT
+                i.insight_id,
+                i.session_id,
+                i.run_id,
+                i.analysis,
+                i.complete,
+                i.created_at,
+                i.updated_at,
+                (SELECT l.user_id          FROM logs l WHERE l.session_id = i.session_id LIMIT 1) AS user_id,
+                (SELECT l.scenario_group_id FROM logs l WHERE l.session_id = i.session_id LIMIT 1) AS scenario_group_id,
+                (SELECT l.scenario          FROM logs l WHERE l.session_id = i.session_id LIMIT 1) AS scenario,
+                (SELECT COUNT(*)            FROM logs l WHERE l.session_id = i.session_id) AS message_count
+            FROM insights i
+            ORDER BY i.created_at DESC
         """).fetchall()
         conn.close()
         self._send_json([dict(r) for r in rows])

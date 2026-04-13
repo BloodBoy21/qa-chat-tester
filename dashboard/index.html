@@ -199,6 +199,42 @@ textarea.code{width:100%;background:#0d1117;color:#e6edf3;border:none;padding:16
 .confirm-box p{color:var(--muted);font-size:13px;margin-bottom:20px;line-height:1.5}
 .confirm-box .actions{display:flex;gap:10px;justify-content:center}
 .hidden{display:none!important}
+
+/* ── SEARCH BAR ── */
+.search-bar{display:flex;gap:8px;align-items:center;padding:12px 14px;border-bottom:1px solid var(--border)}
+.search-select{background:var(--surface2);border:1px solid var(--border);color:var(--text);
+               padding:7px 10px;border-radius:7px;font-size:12px;outline:none;cursor:pointer}
+.search-select:focus{border-color:var(--accent)}
+.search-input{flex:1;background:var(--surface2);border:1px solid var(--border);color:var(--text);
+              padding:7px 12px;border-radius:7px;font-size:12px;outline:none}
+.search-input:focus{border-color:var(--accent)}
+.search-input::placeholder{color:var(--muted)}
+
+/* ── STATUS CHIPS ── */
+.chip{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:20px;font-size:11px;font-weight:600;white-space:nowrap}
+.chip-green{background:rgba(74,222,128,.12);color:#4ade80;border:1px solid rgba(74,222,128,.25)}
+.chip-red{background:rgba(248,113,113,.12);color:#f87171;border:1px solid rgba(248,113,113,.25)}
+.chip-blue{background:rgba(147,197,253,.1);color:#93c5fd;border:1px solid rgba(147,197,253,.2)}
+.chip-gray{background:var(--surface2);color:var(--muted);border:1px solid var(--border)}
+.chip-orange{background:rgba(251,191,36,.1);color:#fbbf24;border:1px solid rgba(251,191,36,.2)}
+
+/* ── ANÁLISIS PAGE ── */
+.analysis-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;
+               padding:16px 18px;margin-bottom:10px;border-left:3px solid var(--border);transition:.15s}
+.analysis-card.ok{border-left-color:var(--green)}
+.analysis-card.fail{border-left-color:var(--red)}
+.analysis-card.pending{border-left-color:var(--warn)}
+.analysis-card:hover{background:var(--surface2)}
+.analysis-meta{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px}
+.analysis-text{font-size:13px;line-height:1.6;color:var(--text);white-space:pre-wrap;
+               word-break:break-word;max-height:72px;overflow:hidden;position:relative}
+.analysis-text::after{content:'';position:absolute;bottom:0;left:0;right:0;height:28px;
+                      background:linear-gradient(transparent,var(--surface))}
+.analysis-text.expanded{max-height:none}
+.analysis-text.expanded::after{display:none}
+.analysis-card:hover .analysis-text::after{background:linear-gradient(transparent,var(--surface2))}
+.analysis-actions{display:flex;gap:8px;align-items:center;margin-top:10px;padding-top:8px;
+                  border-top:1px solid var(--border)}
 </style>
 </head>
 <body>
@@ -213,6 +249,10 @@ textarea.code{width:100%;background:#0d1117;color:#e6edf3;border:none;padding:16
   <div class="nav-item" data-page="conversations" onclick="showPage('conversations',this)">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
     Conversaciones
+  </div>
+  <div class="nav-item" data-page="analyses" onclick="showPage('analyses',this)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+    Análisis
   </div>
   <div class="nav-item" data-page="cases" onclick="showPage('cases',this)">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
@@ -283,27 +323,33 @@ let pollTimer = null;
 let sseSource = null;
 let convList = [];
 let currentConvId = null;
+let convSearchField = 'session_id';
+let convSearchQuery = '';
+let analysesList = [];
+let analysisSearchQuery = '';
 
 // ── Navigation ──────────────────────────────────────────────────────────────
 function showPage(name, el) {
   currentPage = name;
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   el.classList.add('active');
-  const titles = {dashboard:'Dashboard', conversations:'Conversaciones', cases:'Cases JSON', run:'Ejecutar Batch'};
+  const titles = {dashboard:'Dashboard', conversations:'Conversaciones', analyses:'Análisis', cases:'Cases JSON', run:'Ejecutar Batch'};
   document.getElementById('pageTitle').textContent = titles[name] || name;
   clearInterval(pollTimer);
   if (sseSource) { sseSource.close(); sseSource = null; }
   currentConvId = null;
-  if (name === 'conversations') convPage = 1;
+  if (name === 'conversations') { convPage = 1; convSearchQuery = ''; }
+  if (name === 'analyses') analysisSearchQuery = '';
   render();
 }
 
 function render() {
   const c = document.getElementById('content');
-  if (currentPage === 'dashboard')     renderDashboard(c);
+  if (currentPage === 'dashboard')         renderDashboard(c);
   else if (currentPage === 'conversations') renderConversations(c);
-  else if (currentPage === 'cases')    renderCases(c);
-  else if (currentPage === 'run')      renderRun(c);
+  else if (currentPage === 'analyses')      renderAnalyses(c);
+  else if (currentPage === 'cases')         renderCases(c);
+  else if (currentPage === 'run')           renderRun(c);
 }
 
 // ── API helpers ──────────────────────────────────────────────────────────────
@@ -392,11 +438,41 @@ async function renderConversations(c) {
           <a class="btn btn-success refresh-btn" href="/api/export/conversations" download="conversaciones.xlsx">⬇ Exportar Excel</a>
         </div>
       </div>
+      <div class="search-bar">
+        <select class="search-select" id="conv-field-sel" onchange="convSearch()" title="Campo de búsqueda">
+          <option value="session_id">Session ID</option>
+          <option value="run_id">Run ID</option>
+          <option value="user_id">Usuario</option>
+          <option value="scenario">Escenario</option>
+          <option value="scenario_group_id">Grupo</option>
+        </select>
+        <input class="search-input" id="conv-search-q" type="text"
+               placeholder="Buscar…" oninput="convSearch()" value="${escHtml(convSearchQuery)}"/>
+        <button class="btn btn-ghost" style="padding:5px 10px;font-size:12px" onclick="clearConvSearch()">✕</button>
+      </div>
       <div id="conv-list-wrap">${loading()}</div>
       <div id="conv-pagination" style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-top:1px solid var(--border)"></div>
     </div>`;
+  // restore field selector
+  const sel = document.getElementById('conv-field-sel');
+  if (sel) sel.value = convSearchField;
   await loadConvList();
   pollTimer = setInterval(loadConvList, 6000);
+}
+
+function convSearch() {
+  convSearchField = document.getElementById('conv-field-sel')?.value || 'session_id';
+  convSearchQuery = document.getElementById('conv-search-q')?.value || '';
+  convPage = 1;
+  renderConvPage();
+}
+
+function clearConvSearch() {
+  convSearchQuery = '';
+  const el = document.getElementById('conv-search-q');
+  if (el) el.value = '';
+  convPage = 1;
+  renderConvPage();
 }
 
 async function loadConvList() {
@@ -409,40 +485,58 @@ function renderConvPage() {
   const pg = document.getElementById('conv-pagination');
   if (!el) return;
 
-  if (!convList.length) {
-    el.innerHTML = `<div class="empty-state">Sin conversaciones</div>`;
+  // Apply search filter
+  const filtered = convSearchQuery
+    ? convList.filter(r => (String(r[convSearchField] || '')).toLowerCase().includes(convSearchQuery.toLowerCase()))
+    : convList;
+
+  if (!filtered.length) {
+    el.innerHTML = `<div class="empty-state">${convSearchQuery ? 'Sin resultados para "'+escHtml(convSearchQuery)+'"' : 'Sin conversaciones'}</div>`;
     if (pg) pg.innerHTML = '';
     return;
   }
 
-  const totalPages = Math.ceil(convList.length / CONV_PAGE_SIZE);
+  const totalPages = Math.ceil(filtered.length / CONV_PAGE_SIZE);
   if (convPage > totalPages) convPage = totalPages;
   const start = (convPage - 1) * CONV_PAGE_SIZE;
-  const page  = convList.slice(start, start + CONV_PAGE_SIZE);
+  const page  = filtered.slice(start, start + CONV_PAGE_SIZE);
 
   el.innerHTML = `<table>
     <thead><tr>
       <th>Session ID</th><th>Run ID</th><th>Escenario</th><th>Usuario</th>
-      <th>Msjs</th><th>Insight</th><th>Inicio</th><th>Último</th>
+      <th>Msjs</th><th>Estado</th><th>Objetivo</th><th>Inicio</th>
     </tr></thead>
     <tbody>
-    ${page.map(r => `<tr onclick="openConvDetail('${r.session_id}')">
-      <td style="font-family:monospace;font-size:11px" title="${r.session_id}">${r.session_id.slice(0,20)}…</td>
-      <td style="font-family:monospace;font-size:11px">${r.run_id ? r.run_id.slice(0,14)+'…' : '–'}</td>
-      <td title="${r.scenario||''}">${r.scenario_group_id ? `<span class="badge badge-blue">${r.scenario_group_id}</span>` : '–'}</td>
-      <td>${r.user_id||'–'}</td>
-      <td><b>${r.message_count}</b></td>
-      <td>${r.insight_complete===1?'<span class="badge badge-green">✓ listo</span>':r.insight_summary?'<span class="badge badge-gray">parcial</span>':'–'}</td>
-      <td style="color:var(--muted);font-size:11px">${fmtDate(r.started_at)}</td>
-      <td style="color:var(--muted);font-size:11px">${fmtDate(r.last_message_at)}</td>
-    </tr>`).join('')}
+    ${page.map(r => {
+      const hasAnalysis = r.insight_summary != null || r.insight_complete != null;
+      const estadoBadge = hasAnalysis
+        ? `<span class="chip chip-blue">✓ Analizada</span>`
+        : `<span class="chip chip-orange">⏳ En curso</span>`;
+      const objetivoBadge = !hasAnalysis
+        ? `<span style="color:var(--muted);font-size:11px">–</span>`
+        : r.insight_complete === 1
+          ? `<span class="chip chip-green">✓ Cumplido</span>`
+          : `<span class="chip chip-red">✗ No cumplido</span>`;
+      return `<tr onclick="openConvDetail('${r.session_id}')">
+        <td style="font-family:monospace;font-size:11px" title="${r.session_id}">${r.session_id.slice(0,18)}…</td>
+        <td style="font-family:monospace;font-size:11px" title="${r.run_id||''}">${r.run_id ? r.run_id.slice(0,12)+'…' : '–'}</td>
+        <td title="${r.scenario||''}">${r.scenario_group_id ? `<span class="badge badge-blue">${r.scenario_group_id}</span>` : '–'}</td>
+        <td>${r.user_id||'–'}</td>
+        <td><b>${r.message_count}</b></td>
+        <td>${estadoBadge}</td>
+        <td>${objetivoBadge}</td>
+        <td style="color:var(--muted);font-size:11px">${fmtDate(r.started_at)}</td>
+      </tr>`;
+    }).join('')}
     </tbody></table>`;
 
   if (pg) {
     const from = start + 1;
-    const to   = Math.min(start + CONV_PAGE_SIZE, convList.length);
+    const to   = Math.min(start + CONV_PAGE_SIZE, filtered.length);
+    const total = filtered.length;
+    const suffix = convSearchQuery && filtered.length !== convList.length ? ` (de ${convList.length})` : '';
     pg.innerHTML = `
-      <span style="font-size:12px;color:var(--muted)">${from}–${to} de ${convList.length}</span>
+      <span style="font-size:12px;color:var(--muted)">${from}–${to} de ${total}${suffix}</span>
       <div style="display:flex;gap:4px;align-items:center">
         <button class="btn btn-ghost" style="padding:4px 10px" onclick="convGoPage(1)" ${convPage===1?'disabled':''}>«</button>
         <button class="btn btn-ghost" style="padding:4px 10px" onclick="convGoPage(${convPage-1})" ${convPage===1?'disabled':''}>‹</button>
@@ -677,6 +771,120 @@ function backToConvList() {
   clearInterval(pollTimer);
   currentConvId = null;
   renderConversations(document.getElementById('content'));
+}
+
+// ── ANALYSES ───────────────────────────────────────────────────────────────────
+async function renderAnalyses(c) {
+  c.innerHTML = `
+    <div class="card">
+      <div class="card-header">
+        Análisis de conversaciones
+        <div class="actions">
+          <button class="btn btn-ghost refresh-btn" onclick="loadAnalyses()">↻ Actualizar</button>
+        </div>
+      </div>
+      <div class="search-bar">
+        <input class="search-input" id="analysis-search-q" type="text"
+               placeholder="Buscar en análisis, escenario, usuario, session ID…"
+               oninput="analysisSearch()" value="${escHtml(analysisSearchQuery)}"/>
+        <button class="btn btn-ghost" style="padding:5px 10px;font-size:12px" onclick="clearAnalysisSearch()">✕</button>
+      </div>
+      <div id="analyses-wrap" style="padding:16px">${loading('Cargando análisis…')}</div>
+    </div>`;
+  await loadAnalyses();
+  pollTimer = setInterval(loadAnalyses, 8000);
+}
+
+async function loadAnalyses() {
+  const res = await api('GET', '/api/analyses');
+  analysesList = Array.isArray(res) ? res : [];
+  if (!Array.isArray(res) && res?.error) {
+    const wrap = document.getElementById('analyses-wrap');
+    if (wrap) wrap.innerHTML = `<div class="empty-state" style="color:var(--red)">Error: ${escHtml(res.error)}</div>`;
+    return;
+  }
+  renderAnalysisPage();
+}
+
+function analysisSearch() {
+  analysisSearchQuery = document.getElementById('analysis-search-q')?.value || '';
+  renderAnalysisPage();
+}
+
+function clearAnalysisSearch() {
+  analysisSearchQuery = '';
+  const el = document.getElementById('analysis-search-q');
+  if (el) el.value = '';
+  renderAnalysisPage();
+}
+
+function renderAnalysisPage() {
+  const wrap = document.getElementById('analyses-wrap');
+  if (!wrap) return;
+
+  const q = analysisSearchQuery.toLowerCase();
+  const list = q
+    ? analysesList.filter(a =>
+        (a.analysis||'').toLowerCase().includes(q) ||
+        (a.scenario||'').toLowerCase().includes(q) ||
+        (a.scenario_group_id||'').toLowerCase().includes(q) ||
+        (a.user_id||'').toLowerCase().includes(q) ||
+        (a.session_id||'').toLowerCase().includes(q))
+    : analysesList;
+
+  if (!list.length) {
+    wrap.innerHTML = `<div class="empty-state">${q ? 'Sin resultados para "'+escHtml(analysisSearchQuery)+'"' : 'Sin análisis registrados'}</div>`;
+    return;
+  }
+
+  const suffix = q && list.length !== analysesList.length
+    ? `<span style="font-size:12px;color:var(--muted);margin-bottom:12px;display:block">${list.length} de ${analysesList.length} resultados</span>`
+    : '';
+
+  wrap.innerHTML = suffix + list.map((a, idx) => {
+    const cardClass = a.complete === 1 ? 'ok' : a.complete === 0 ? 'fail' : 'pending';
+    const objBadge  = a.complete === 1
+      ? `<span class="chip chip-green">✓ Objetivo cumplido</span>`
+      : a.complete === 0
+        ? `<span class="chip chip-red">✗ Objetivo no cumplido</span>`
+        : `<span class="chip chip-orange">⏳ Sin evaluar</span>`;
+    const expandId = `atxt_${idx}`;
+    return `
+    <div class="analysis-card ${cardClass}">
+      <div class="analysis-meta">
+        <span style="font-family:monospace;font-size:11px;color:var(--muted)" title="${a.session_id||''}">${(a.session_id||'–').slice(0,20)}…</span>
+        ${a.scenario_group_id ? `<span class="badge badge-blue">${a.scenario_group_id}</span>` : ''}
+        ${a.scenario ? `<span class="tag" title="${a.scenario}">${a.scenario.length>40?a.scenario.slice(0,38)+'…':a.scenario}</span>` : ''}
+        ${a.user_id ? `<span class="tag">👤 ${a.user_id}</span>` : ''}
+        ${a.message_count ? `<span class="tag">💬 ${a.message_count} msgs</span>` : ''}
+        <span style="margin-left:auto;font-size:11px;color:var(--muted)">${fmtDate(a.created_at)}</span>
+      </div>
+      ${objBadge}
+      <div class="analysis-text" id="${expandId}" style="margin-top:10px">
+        ${escHtml(a.analysis || '(sin análisis)')}
+      </div>
+      <div class="analysis-actions">
+        <button class="btn btn-ghost" style="font-size:11px;padding:4px 10px"
+          onclick="toggleAnalysisExpand('${expandId}',this)">▼ Expandir</button>
+        <button class="btn btn-primary" style="font-size:11px;padding:4px 12px"
+          onclick="openConvFromAnalysis('${a.session_id}')">↗ Ver conversación</button>
+        <span style="margin-left:auto;font-family:monospace;font-size:10px;color:var(--muted)"
+              title="${a.run_id||''}">run: ${(a.run_id||'–').slice(0,12)}…</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function toggleAnalysisExpand(id, btn) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const expanded = el.classList.toggle('expanded');
+  btn.textContent = expanded ? '▲ Colapsar' : '▼ Expandir';
+}
+
+function openConvFromAnalysis(sid) {
+  currentConvId = sid;
+  showPage('conversations', document.querySelector('[data-page="conversations"]'));
 }
 
 // ── CASES ──────────────────────────────────────────────────────────────────────
