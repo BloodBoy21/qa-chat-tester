@@ -212,6 +212,7 @@ function showPage(name, el) {
   clearInterval(pollTimer);
   if (sseSource) { sseSource.close(); sseSource = null; }
   currentConvId = null;
+  if (name === 'conversations') convPage = 1;
   render();
 }
 
@@ -292,6 +293,9 @@ function openConversation(sid) {
 }
 
 // ── CONVERSATIONS ──────────────────────────────────────────────────────────────
+let convPage = 1;
+const CONV_PAGE_SIZE = 20;
+
 async function renderConversations(c) {
   if (currentConvId) {
     renderConvDetail(c, currentConvId);
@@ -307,6 +311,7 @@ async function renderConversations(c) {
         </div>
       </div>
       <div id="conv-list-wrap">Cargando…</div>
+      <div id="conv-pagination" style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-top:1px solid var(--border)"></div>
     </div>`;
   await loadConvList();
   pollTimer = setInterval(loadConvList, 6000);
@@ -314,16 +319,32 @@ async function renderConversations(c) {
 
 async function loadConvList() {
   convList = await api('GET', '/api/conversations');
+  renderConvPage();
+}
+
+function renderConvPage() {
   const el = document.getElementById('conv-list-wrap');
+  const pg = document.getElementById('conv-pagination');
   if (!el) return;
-  if (!convList.length) { el.innerHTML = `<div class="empty-state">Sin conversaciones</div>`; return; }
+
+  if (!convList.length) {
+    el.innerHTML = `<div class="empty-state">Sin conversaciones</div>`;
+    if (pg) pg.innerHTML = '';
+    return;
+  }
+
+  const totalPages = Math.ceil(convList.length / CONV_PAGE_SIZE);
+  if (convPage > totalPages) convPage = totalPages;
+  const start = (convPage - 1) * CONV_PAGE_SIZE;
+  const page  = convList.slice(start, start + CONV_PAGE_SIZE);
+
   el.innerHTML = `<table>
     <thead><tr>
       <th>Session ID</th><th>Run ID</th><th>Escenario</th><th>Usuario</th>
       <th>Msjs</th><th>Insight</th><th>Inicio</th><th>Último</th>
     </tr></thead>
     <tbody>
-    ${convList.map(r => `<tr onclick="openConvDetail('${r.session_id}')">
+    ${page.map(r => `<tr onclick="openConvDetail('${r.session_id}')">
       <td style="font-family:monospace;font-size:11px" title="${r.session_id}">${r.session_id.slice(0,20)}…</td>
       <td style="font-family:monospace;font-size:11px">${r.run_id ? r.run_id.slice(0,14)+'…' : '–'}</td>
       <td title="${r.scenario||''}">${r.scenario_group_id ? `<span class="badge badge-blue">${r.scenario_group_id}</span>` : '–'}</td>
@@ -334,6 +355,35 @@ async function loadConvList() {
       <td style="color:var(--muted);font-size:11px">${fmtDate(r.last_message_at)}</td>
     </tr>`).join('')}
     </tbody></table>`;
+
+  if (pg) {
+    const from = start + 1;
+    const to   = Math.min(start + CONV_PAGE_SIZE, convList.length);
+    pg.innerHTML = `
+      <span style="font-size:12px;color:var(--muted)">${from}–${to} de ${convList.length}</span>
+      <div style="display:flex;gap:4px;align-items:center">
+        <button class="btn btn-ghost" style="padding:4px 10px" onclick="convGoPage(1)" ${convPage===1?'disabled':''}>«</button>
+        <button class="btn btn-ghost" style="padding:4px 10px" onclick="convGoPage(${convPage-1})" ${convPage===1?'disabled':''}>‹</button>
+        ${pageButtons(convPage, totalPages)}
+        <button class="btn btn-ghost" style="padding:4px 10px" onclick="convGoPage(${convPage+1})" ${convPage===totalPages?'disabled':''}>›</button>
+        <button class="btn btn-ghost" style="padding:4px 10px" onclick="convGoPage(${totalPages})" ${convPage===totalPages?'disabled':''}>»</button>
+      </div>`;
+  }
+}
+
+function pageButtons(current, total) {
+  const delta = 2;
+  const pages = [];
+  for (let i = Math.max(1, current - delta); i <= Math.min(total, current + delta); i++) pages.push(i);
+  return pages.map(p => `
+    <button class="btn ${p===current?'btn-primary':'btn-ghost'}" style="padding:4px 10px;min-width:32px"
+      onclick="convGoPage(${p})">${p}</button>`).join('');
+}
+
+function convGoPage(p) {
+  const totalPages = Math.ceil(convList.length / CONV_PAGE_SIZE);
+  convPage = Math.max(1, Math.min(p, totalPages));
+  renderConvPage();
 }
 
 function openConvDetail(sid) {
