@@ -46,8 +46,8 @@ def send_to_agent(
     user_id: str = "default_user",
     is_hsm: bool = False,
     hsm_name: str = "",
-    images: list = [],
-    attachments: list = [],
+    images: list = None,
+    attachments: list = None,
     account_id: str = "3057",
     session_id: str = "",
     session_backend: str = "memory",
@@ -55,7 +55,6 @@ def send_to_agent(
     run_id: str = "",
     scenario_group_id: str = "",
     scenario: str = "",
-    retries: int = 3,
     *args,
     **kwargs,
 ) -> dict:
@@ -92,55 +91,34 @@ def send_to_agent(
         "session_backend": session_backend,
         "persist_session": persist_session,
     }
-    try:
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            future = _http_executor.submit(_http_post, data)
-            response = future.result()
-        else:
-            response = _http_post(data)
 
-        response = clean_response(response)
-        save_interaction(
-            message=message,
-            answer=response,
-            user_id=user_id,
-            files=attachments,
-            images=images,
-            run_id=run_id,
-            scenario_group_id=scenario_group_id,
-            scenario=scenario,
-        )
-        return response
-    except Exception as e:
-        logger.error(f"Error sending message to agent: {e}")
-        if retries > 0:
-            logger.info(f"Retrying... ({retries} attempts left)")
-            return send_to_agent(
-                message=message,
-                user_id=user_id,
-                is_hsm=is_hsm,
-                hsm_name=hsm_name,
-                images=images,
-                attachments=attachments,
-                account_id=account_id,
-                session_id=session_id,
-                session_backend=session_backend,
-                persist_session=persist_session,
-                run_id=run_id,
-                scenario_group_id=scenario_group_id,
-                scenario=scenario,
-                retries=retries - 1,
-            )
-        return {"error": str(e)}
+    loop = asyncio.get_event_loop()
+    if loop.is_running():
+        future = _http_executor.submit(_http_post, data)
+        response = future.result()
+    else:
+        response = _http_post(data)
+
+    response = clean_response(response)
+    save_interaction(
+        message=message,
+        answer=response,
+        user_id=user_id,
+        files=attachments,
+        images=images,
+        run_id=run_id,
+        scenario_group_id=scenario_group_id,
+        scenario=scenario,
+    )
+    return response
 
 
 def save_interaction(
     message: str,
     answer: dict,
     user_id: str = "default_user",
-    files: list = [],
-    images: list = [],
+    files: list = None,
+    images: list = None,
     run_id: str = "",
     scenario_group_id: str = "",
     scenario: str = "",
