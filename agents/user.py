@@ -13,9 +13,9 @@ class UserAgent(AgentBase):
         self,
         context: str,
         user_id: str = "default_user",
-        tools: List[Callable] = None,
+        tools: List[Callable] = [],
         model: str = "",
-        sub_agents: List[Any] = None,
+        sub_agents: List[Any] = [],
     ):
         super().__init__(context, user_id, tools or TOOLS, model, sub_agents)
 
