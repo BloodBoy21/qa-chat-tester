@@ -179,6 +179,7 @@ class UserAgent(AgentBase):
             campaign_id: string           // ID único de la campaña
             campaign_name: string         // Nombre descriptivo de la campaña
             whatsapp_template_name: string // Nombre del template de WhatsApp asociado
+            content?:string                  // mensaje de plantilla de WhatsApp (opcional)
             }
         ]
         }

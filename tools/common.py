@@ -44,14 +44,13 @@ def _http_post(data: dict) -> dict:
 def send_to_agent(
     message: str,
     user_id: str = "default_user",
-    is_hsm: bool = False,
-    hsm_name: str = "",
     images: list = None,
     attachments: list = None,
+    campaigns: list = None,
     account_id: str = "3057",
     session_id: str = "",
-    session_backend: str = "memory",
-    persist_session: bool = False,
+    session_backend: str = "redis",
+    persist_session: bool = True,
     run_id: str = "",
     scenario_group_id: str = "",
     scenario: str = "",
@@ -63,54 +62,58 @@ def send_to_agent(
     Args:
         message (str): The message to send to the agent.
         user_id (str): The ID of the user sending the message.
-        is_hsm (bool): Whether the message is an HSM (Highly Structured Message).
-        hsm_name (str): The name of the HSM template, if applicable.
         images (list[str]): A list of image URLs to include in the message.
         attachments (list[dict[str, str]]): A list of attachment dicts to include.
+        campaigns (list[dict[str, str]]): A list of campaign dicts to include in the context.
         account_id (str): The ID of the account associated with the message.
         session_id (str): The ID of the session for maintaining context.
         session_backend (str): The backend to use for session management.
         persist_session (bool): Whether to persist the session after processing.
         scenario_group_id (str): The ID of the scenario group.
         scenario (str): The name of the scenario being executed.
+
     Returns:
         dict: The response from the agent.
     """
-    images = images or []
-    attachments = attachments or []
+    try:
+        images = images or []
+        attachments = attachments or []
+        campaigns = campaigns or []
 
-    data = {
-        "account_id": account_id,
-        "user_id": user_id,
-        "text": message,
-        "is_hsm": is_hsm,
-        "hsm_name": hsm_name,
-        "images": images,
-        "attachments": attachments,
-        "session_id": session_id,
-        "session_backend": session_backend,
-        "persist_session": persist_session,
-    }
+        data = {
+            "account_id": account_id,
+            "user_id": user_id,
+            "text": message,
+            "images": images,
+            "attachments": attachments,
+            "session_id": session_id,
+            "session_backend": session_backend,
+            "persist_session": persist_session,
+            "campaigns": campaigns,
+        }
+        logger.info(f"Sending message to agent: {data}")
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            future = _http_executor.submit(_http_post, data)
+            response = future.result()
+        else:
+            response = _http_post(data)
 
-    loop = asyncio.get_event_loop()
-    if loop.is_running():
-        future = _http_executor.submit(_http_post, data)
-        response = future.result()
-    else:
-        response = _http_post(data)
-
-    response = clean_response(response)
-    save_interaction(
-        message=message,
-        answer=response,
-        user_id=user_id,
-        files=attachments,
-        images=images,
-        run_id=run_id,
-        scenario_group_id=scenario_group_id,
-        scenario=scenario,
-    )
-    return response
+        response = clean_response(response)
+        save_interaction(
+            message=message,
+            answer=response,
+            user_id=user_id,
+            files=attachments,
+            images=images,
+            run_id=run_id,
+            scenario_group_id=scenario_group_id,
+            scenario=scenario,
+        )
+        return response
+    except Exception as e:
+        logger.error(f"Error sending message to agent: {e}")
+        return {"error": str(e)}
 
 
 def save_interaction(
