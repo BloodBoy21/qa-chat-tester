@@ -452,7 +452,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
     def _start_run(self):
         try:
-            data = json.loads(self._body()) if self._body() else {}
+            body = self._body()
+            data = json.loads(body) if body else {}
         except Exception:
             data = {}
 

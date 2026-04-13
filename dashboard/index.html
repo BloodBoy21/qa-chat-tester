@@ -593,7 +593,7 @@ function showConfirm(title, msg, cb) {
   document.getElementById('confirmModal').classList.remove('hidden');
 }
 function closeConfirm() { document.getElementById('confirmModal').classList.add('hidden'); _confirmCb = null; }
-document.getElementById('confirmOkBtn').onclick = () => { closeConfirm(); _confirmCb && _confirmCb(); };
+document.getElementById('confirmOkBtn').onclick = () => { const cb = _confirmCb; closeConfirm(); cb && cb(); };
 
 // ── Utils ──────────────────────────────────────────────────────────────────────
 function fmtDate(iso) {
