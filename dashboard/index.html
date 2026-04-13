@@ -153,6 +153,14 @@ textarea.code{width:100%;background:#0d1117;color:#e6edf3;border:none;padding:16
 .run-status{display:flex;align-items:center;gap:8px;font-size:12px}
 .pulse{animation:pulse 1.2s infinite}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+@keyframes spin{to{transform:rotate(360deg)}}
+.spinner-wrap{display:flex;flex-direction:column;align-items:center;justify-content:center;
+              gap:14px;padding:48px;color:var(--muted);font-size:12px;letter-spacing:.04em}
+.spinner{width:32px;height:32px;border-radius:50%;
+         border:3px solid var(--border);
+         border-top-color:var(--accent);
+         animation:spin .7s linear infinite}
+.spinner.sm{width:18px;height:18px;border-width:2px}
 
 /* ── MISC ── */
 .empty-state{text-align:center;padding:48px;color:var(--muted)}
@@ -289,7 +297,7 @@ async function renderDashboard(c) {
           <button class="btn btn-danger refresh-btn" onclick="confirmClearDB()">🗑 Limpiar DB</button>
         </div>
       </div>
-      <div id="dash-conv-table">Cargando…</div>
+      <div id="dash-conv-table">${loading()}</div>
     </div>
   `;
   await refreshDashboard();
@@ -350,7 +358,7 @@ async function renderConversations(c) {
           <a class="btn btn-success refresh-btn" href="/api/export/conversations" download="conversaciones.xlsx">⬇ Exportar Excel</a>
         </div>
       </div>
-      <div id="conv-list-wrap">Cargando…</div>
+      <div id="conv-list-wrap">${loading()}</div>
       <div id="conv-pagination" style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-top:1px solid var(--border)"></div>
     </div>`;
   await loadConvList();
@@ -435,7 +443,7 @@ function openConvDetail(sid) {
 async function renderConvDetail(c, sid) {
   c.innerHTML = `
     <button class="btn btn-ghost back-btn" onclick="backToConvList()">← Volver</button>
-    <div class="conv-detail" id="conv-detail-wrap">Cargando…</div>`;
+    <div class="conv-detail" id="conv-detail-wrap">${loading('Cargando conversación…')}</div>`;
   await loadConvDetail(sid);
   pollTimer = setInterval(() => loadConvDetail(sid), 4000);
 }
@@ -557,11 +565,14 @@ async function renderCases(c) {
         <button class="btn btn-success" onclick="saveCases()">💾 Guardar</button>
         <span class="editor-status" id="cases-status"></span>
       </div>
-      <textarea class="code" id="cases-editor" spellcheck="false" placeholder="Cargando…"></textarea>
+      <div id="cases-spinner" style="position:relative">${loading('Cargando cases.json…')}</div>
+      <textarea class="code hidden" id="cases-editor" spellcheck="false"></textarea>
     </div>`;
   const data = await api('GET', '/api/cases');
+  document.getElementById('cases-spinner')?.remove();
   const ta = document.getElementById('cases-editor');
   if (ta) {
+    ta.classList.remove('hidden');
     try { ta.value = JSON.stringify(JSON.parse(data.content), null, 2); }
     catch { ta.value = data.content || '[]'; }
   }
@@ -737,6 +748,10 @@ function fmtDate(iso) {
     const d = new Date(iso);
     return d.toLocaleString('es', { dateStyle:'short', timeStyle:'short' });
   } catch { return iso; }
+}
+
+function loading(label = '') {
+  return `<div class="spinner-wrap"><div class="spinner"></div>${label ? `<span>${label}</span>` : ''}</div>`;
 }
 
 function escHtml(s) {
