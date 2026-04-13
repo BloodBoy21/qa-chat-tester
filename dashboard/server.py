@@ -412,6 +412,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     _run_state["returncode"] = -1
                     _run_state["pid"]        = None
                     _broadcast(None)
+                    # Clean up any lingering subprocesses
+                    subprocess.run(
+                        ["pkill", "-9", "-f", "main.py.*batch_runner"],
+                        capture_output=True,
+                    )
 
             self._send_json({
                 "running":     _run_state["running"],
@@ -521,15 +526,39 @@ class Handler(http.server.BaseHTTPRequestHandler):
     def _stop_run(self):
         with _run_lock:
             pid = _run_state.get("pid")
+
+        msgs = []
+
+        # 1. Kill main batch_runner process
         if pid:
             try:
                 import signal
                 os.kill(pid, signal.SIGTERM)
-                self._send_json({"ok": True, "message": f"SIGTERM enviado al PID {pid}"})
+                msgs.append(f"SIGTERM → PID {pid}")
+            except ProcessLookupError:
+                msgs.append(f"PID {pid} ya no existe")
             except Exception as e:
-                self._send_json({"error": str(e)}, 500)
-        else:
+                msgs.append(f"Error killing PID {pid}: {e}")
+
+        # 2. Kill any lingering main.py subprocesses spawned by batch_runner
+        try:
+            result = subprocess.run(
+                ["pkill", "-9", "-f", "main.py.*batch_runner"],
+                capture_output=True, text=True,
+            )
+            # pkill exits 0 if it killed something, 1 if no match
+            if result.returncode == 0:
+                msgs.append("pkill -9 main.py subprocesos OK")
+            else:
+                msgs.append("pkill: sin subprocesos activos")
+        except Exception as e:
+            msgs.append(f"pkill error: {e}")
+
+        if not pid and not msgs:
             self._send_json({"error": "No hay proceso activo"}, 400)
+            return
+
+        self._send_json({"ok": True, "message": " | ".join(msgs)})
 
 
 # ── Entry point ───────────────────────────────────────────────────────────────
