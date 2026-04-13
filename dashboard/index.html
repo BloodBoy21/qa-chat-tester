@@ -84,8 +84,8 @@ tr:hover td{background:var(--surface2);cursor:pointer}
              align-items:center;gap:10px;flex-wrap:wrap}
 .conv-messages{flex:1;overflow-y:auto;padding:20px 24px;display:flex;flex-direction:column;gap:0}
 /* timeline turn */
-.tl-turn{display:flex;flex-direction:column;gap:0;position:relative;padding-left:36px;margin-bottom:4px}
-.tl-turn::before{content:'';position:absolute;left:14px;top:28px;bottom:0;width:2px;background:var(--border)}
+.tl-turn{display:flex;flex-direction:column;gap:0;position:relative;padding-left:16px;margin-bottom:4px;margin-left:32px}
+.tl-turn::before{content:'';position:absolute;left:-6px;top:28px;bottom:0;width:2px;background:var(--border)}
 .tl-turn:last-child::before{display:none}
 /* avatar dot */
 .tl-dot{position:absolute;left:6px;top:10px;width:18px;height:18px;border-radius:50%;
@@ -102,7 +102,23 @@ tr:hover td{background:var(--surface2);cursor:pointer}
 .tl-text{font-size:13px;line-height:1.6;color:var(--text);white-space:pre-wrap;word-break:break-word;
          padding:8px 12px;background:var(--surface2);border-radius:8px;border:1px solid var(--border);margin-top:2px}
 .tl-row.user .tl-text{background:rgba(108,99,255,.12);border-color:rgba(108,99,255,.25)}
-.tl-turn-num{position:absolute;left:-2px;top:9px;font-size:9px;color:var(--muted)}
+.tl-turn-num{position:absolute;left:-28px;top:8px;width:22px;height:22px;border-radius:50%;
+             background:var(--surface2);border:1px solid var(--border);color:var(--muted);
+             font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center;
+             cursor:pointer;transition:.15s;user-select:none}
+.tl-turn-num:hover{background:var(--accent);border-color:var(--accent);color:#fff}
+/* raw modal */
+.raw-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);display:flex;align-items:center;
+             justify-content:center;z-index:200;padding:20px}
+.raw-box{background:var(--surface);border:1px solid var(--border);border-radius:12px;
+         width:100%;max-width:780px;max-height:85vh;display:flex;flex-direction:column;overflow:hidden}
+.raw-box-header{padding:14px 18px;border-bottom:1px solid var(--border);display:flex;
+                align-items:center;justify-content:space-between;flex-shrink:0}
+.raw-box-header h3{font-size:14px;font-weight:600}
+.raw-body{overflow-y:auto;padding:16px;flex:1}
+.raw-body pre{font-family:'JetBrains Mono','Fira Code',monospace;font-size:11.5px;
+              line-height:1.65;color:#e6edf3;background:#0d1117;padding:14px;
+              border-radius:8px;white-space:pre-wrap;word-break:break-all;margin:0}
 .insight-box{margin:16px;padding:14px;background:rgba(0,212,170,.06);border:1px solid rgba(0,212,170,.25);
              border-radius:10px;color:var(--text);line-height:1.6;font-size:13px}
 .insight-box .insight-label{font-size:10px;text-transform:uppercase;letter-spacing:.07em;
@@ -202,6 +218,18 @@ textarea.code{width:100%;background:#0d1117;color:#e6edf3;border:none;padding:16
     <div class="actions">
       <button class="btn btn-ghost" onclick="closeConfirm()">Cancelar</button>
       <button class="btn btn-danger" id="confirmOkBtn">Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<div class="raw-overlay hidden" id="rawModal">
+  <div class="raw-box">
+    <div class="raw-box-header">
+      <h3 id="rawModalTitle">raw_response</h3>
+      <button class="btn btn-ghost" style="padding:4px 10px" onclick="closeRawModal()">✕ Cerrar</button>
+    </div>
+    <div class="raw-body">
+      <pre id="rawModalContent"></pre>
     </div>
   </div>
 </div>
@@ -458,7 +486,22 @@ async function loadConvDetail(sid) {
   }
 }
 
+// Store raw_response data indexed by turn for the modal
+const _rawStore = {};
+
 function msgBubble(m, idx) {
+  const n = idx + 1;
+  const rawKey = `raw_${n}`;
+
+  // Store raw for modal access
+  if (m.raw_response !== undefined && m.raw_response !== null) {
+    _rawStore[rawKey] = m.raw_response;
+  }
+
+  const hasRaw = _rawStore[rawKey] != null;
+  const turnNumEl = `<span class="tl-turn-num" title="Turno ${n}${hasRaw ? ' · click para ver raw_response' : ''}"
+    ${hasRaw ? `onclick="openRawModal(${n})"` : ''}>${n}</span>`;
+
   const userRow = m.message ? `
     <div class="tl-row user">
       <div class="tl-who user">Usuario <span class="tl-time">${fmtDate(m.created_at)}</span></div>
@@ -472,11 +515,32 @@ function msgBubble(m, idx) {
     </div>` : '';
 
   return `<div class="tl-turn">
-    <div class="tl-dot user">U</div>
-    <span class="tl-turn-num">#${idx+1}</span>
+    ${turnNumEl}
     ${userRow}${botRow}
   </div>`;
 }
+
+function openRawModal(n) {
+  const raw = _rawStore[`raw_${n}`];
+  if (raw == null) return;
+  let text;
+  try {
+    const obj = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    text = JSON.stringify(obj, null, 2);
+  } catch {
+    text = String(raw);
+  }
+  document.getElementById('rawModalTitle').textContent = `Turno ${n} — raw_response`;
+  document.getElementById('rawModalContent').textContent = text;
+  document.getElementById('rawModal').classList.remove('hidden');
+}
+
+function closeRawModal() {
+  document.getElementById('rawModal').classList.add('hidden');
+}
+document.getElementById('rawModal').addEventListener('click', e => {
+  if (e.target === document.getElementById('rawModal')) closeRawModal();
+});
 
 function backToConvList() {
   clearInterval(pollTimer);
