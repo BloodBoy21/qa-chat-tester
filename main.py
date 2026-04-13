@@ -121,7 +121,7 @@ async def run_analysis_agent_manual(
         analysis_agent = AnalysisAgentManual(
             context=context, user_id=user_id, model=model
         )
-        runner = AgentRunner(user_id=user_id, agent=analysis_agent)
+        runner = AgentRunner(user_id=user_id, agent=analysis_agent.Build())
         await runner.generate()
         messages = log_db.get_by_run_id(run_id)
         res = await runner.from_text(json.dumps(messages))
