@@ -402,6 +402,17 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
     def _run_status(self):
         with _run_lock:
+            # If we think it's running, verify the PID is actually alive
+            if _run_state["running"] and _run_state["pid"]:
+                try:
+                    os.kill(_run_state["pid"], 0)  # signal 0 = existence check only
+                except (ProcessLookupError, PermissionError):
+                    # Process is gone (killed externally or crashed)
+                    _run_state["running"]    = False
+                    _run_state["returncode"] = -1
+                    _run_state["pid"]        = None
+                    _broadcast(None)
+
             self._send_json({
                 "running":     _run_state["running"],
                 "returncode":  _run_state["returncode"],
