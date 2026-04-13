@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>QA Chat Tester</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0f1117;--surface:#1a1d27;--surface2:#22263a;--border:#2e3250;
+  --accent:#6c63ff;--accent2:#00d4aa;--danger:#ff4d6d;--warn:#ffd166;
+  --text:#e2e8f0;--muted:#7c85a2;--green:#4ade80;--red:#f87171;
+}
+body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;
+     font-size:14px;display:flex;height:100vh;overflow:hidden}
+
+/* ── SIDEBAR ── */
+.sidebar{width:220px;min-width:220px;background:var(--surface);border-right:1px solid var(--border);
+         display:flex;flex-direction:column;padding:16px 0}
+.sidebar-logo{padding:0 20px 20px;font-size:15px;font-weight:700;color:var(--accent);
+              border-bottom:1px solid var(--border);margin-bottom:8px}
+.sidebar-logo span{color:var(--accent2)}
+.nav-item{display:flex;align-items:center;gap:10px;padding:10px 20px;cursor:pointer;
+          color:var(--muted);transition:.15s;border-left:3px solid transparent;font-size:13px}
+.nav-item:hover{color:var(--text);background:var(--surface2)}
+.nav-item.active{color:var(--accent);border-left-color:var(--accent);background:rgba(108,99,255,.08)}
+.nav-item svg{width:16px;height:16px;flex-shrink:0}
+.sidebar-footer{margin-top:auto;padding:12px 20px;font-size:11px;color:var(--muted);border-top:1px solid var(--border)}
+
+/* ── MAIN ── */
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.topbar{background:var(--surface);border-bottom:1px solid var(--border);
+        padding:14px 24px;display:flex;align-items:center;justify-content:space-between}
+.topbar h1{font-size:16px;font-weight:600}
+.topbar .status-dot{width:8px;height:8px;border-radius:50%;background:var(--green);display:inline-block;margin-right:6px}
+.topbar .status-dot.red{background:var(--red)}
+.content{flex:1;overflow-y:auto;padding:24px}
+
+/* ── CARDS ── */
+.stats-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:24px}
+.stat-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px}
+.stat-card .label{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px}
+.stat-card .value{font-size:28px;font-weight:700}
+.stat-card .value.accent{color:var(--accent)}
+.stat-card .value.green{color:var(--green)}
+.stat-card .value.teal{color:var(--accent2)}
+.stat-card .value.warn{color:var(--warn)}
+
+/* ── TABLES ── */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:20px}
+.card-header{padding:14px 18px;border-bottom:1px solid var(--border);font-weight:600;
+             display:flex;align-items:center;justify-content:space-between}
+.card-header .actions{display:flex;gap:8px}
+table{width:100%;border-collapse:collapse}
+th{background:var(--surface2);color:var(--muted);font-size:11px;text-transform:uppercase;
+   letter-spacing:.05em;padding:10px 14px;text-align:left;font-weight:600}
+td{padding:10px 14px;border-top:1px solid var(--border);vertical-align:middle;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+tr:hover td{background:var(--surface2);cursor:pointer}
+
+/* ── BUTTONS ── */
+.btn{padding:7px 14px;border-radius:7px;border:none;cursor:pointer;font-size:12px;
+     font-weight:600;transition:.15s;display:inline-flex;align-items:center;gap:6px}
+.btn-primary{background:var(--accent);color:#fff}
+.btn-primary:hover{background:#5a52e0}
+.btn-success{background:#166534;color:#4ade80;border:1px solid #15803d}
+.btn-success:hover{background:#14532d}
+.btn-danger{background:#7f1d1d;color:#fca5a5;border:1px solid #991b1b}
+.btn-danger:hover{background:#450a0a}
+.btn-ghost{background:transparent;color:var(--muted);border:1px solid var(--border)}
+.btn-ghost:hover{color:var(--text);border-color:var(--text)}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+
+/* ── BADGES ── */
+.badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600}
+.badge-green{background:#14532d;color:#4ade80}
+.badge-red{background:#7f1d1d;color:#fca5a5}
+.badge-blue{background:#1e3a5f;color:#93c5fd}
+.badge-gray{background:var(--surface2);color:var(--muted)}
+
+/* ── CONVERSATION DETAIL ── */
+.conv-detail{background:var(--surface);border:1px solid var(--border);border-radius:10px;
+             display:flex;flex-direction:column;height:calc(100vh - 100px)}
+.conv-header{padding:14px 18px;border-bottom:1px solid var(--border);display:flex;
+             align-items:center;gap:10px;flex-wrap:wrap}
+.conv-messages{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:12px}
+.msg{max-width:75%;display:flex;flex-direction:column;gap:4px}
+.msg.user{align-self:flex-end;align-items:flex-end}
+.msg.bot{align-self:flex-start;align-items:flex-start}
+.msg-bubble{padding:10px 14px;border-radius:14px;line-height:1.5;font-size:13px;word-break:break-word}
+.msg.user .msg-bubble{background:var(--accent);color:#fff;border-bottom-right-radius:4px}
+.msg.bot .msg-bubble{background:var(--surface2);color:var(--text);border-bottom-left-radius:4px;
+                      border:1px solid var(--border)}
+.msg-meta{font-size:10px;color:var(--muted)}
+.insight-box{margin:16px;padding:14px;background:rgba(0,212,170,.06);border:1px solid rgba(0,212,170,.25);
+             border-radius:10px;color:var(--text);line-height:1.6;font-size:13px}
+.insight-box .insight-label{font-size:10px;text-transform:uppercase;letter-spacing:.07em;
+                            color:var(--accent2);font-weight:700;margin-bottom:8px}
+.back-btn{margin-bottom:16px}
+
+/* ── CASES EDITOR ── */
+.editor-wrap{background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden}
+.editor-toolbar{padding:10px 14px;border-bottom:1px solid var(--border);display:flex;gap:8px;align-items:center}
+.editor-status{margin-left:auto;font-size:12px;color:var(--muted)}
+textarea.code{width:100%;background:#0d1117;color:#e6edf3;border:none;padding:16px;
+              font-family:'JetBrains Mono','Fira Code',monospace;font-size:12.5px;
+              line-height:1.65;resize:none;outline:none;tab-size:2;
+              height:calc(100vh - 220px);min-height:300px}
+
+/* ── RUN PANEL ── */
+.run-form{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:20px;margin-bottom:16px}
+.form-row{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px}
+.form-group{display:flex;flex-direction:column;gap:6px;flex:1;min-width:160px}
+.form-group label{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:600}
+.form-group input{background:var(--surface2);border:1px solid var(--border);color:var(--text);
+                  padding:8px 12px;border-radius:7px;font-size:13px;outline:none}
+.form-group input:focus{border-color:var(--accent)}
+.terminal{background:#0d1117;border:1px solid var(--border);border-radius:10px;
+          padding:14px;height:340px;overflow-y:auto;font-family:'JetBrains Mono','Fira Code',monospace;
+          font-size:12px;line-height:1.6;color:#8b949e}
+.terminal .t-line{padding:1px 0}
+.terminal .t-line.err{color:#f87171}
+.terminal .t-line.ok{color:#4ade80}
+.terminal .t-line.info{color:#93c5fd}
+.terminal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.run-status{display:flex;align-items:center;gap:8px;font-size:12px}
+.pulse{animation:pulse 1.2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+
+/* ── MISC ── */
+.empty-state{text-align:center;padding:48px;color:var(--muted)}
+.empty-state svg{width:40px;height:40px;margin-bottom:12px;opacity:.3}
+.refresh-btn{font-size:11px;padding:5px 10px}
+.section-title{font-size:13px;font-weight:700;color:var(--muted);text-transform:uppercase;
+               letter-spacing:.07em;margin-bottom:14px}
+.tag{display:inline-block;background:var(--surface2);border:1px solid var(--border);
+     border-radius:5px;padding:2px 7px;font-size:11px;color:var(--muted);margin:2px}
+.confirm-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;
+                 align-items:center;justify-content:center;z-index:100}
+.confirm-box{background:var(--surface);border:1px solid var(--border);border-radius:12px;
+             padding:28px;max-width:380px;width:90%;text-align:center}
+.confirm-box h3{font-size:16px;margin-bottom:10px}
+.confirm-box p{color:var(--muted);font-size:13px;margin-bottom:20px;line-height:1.5}
+.confirm-box .actions{display:flex;gap:10px;justify-content:center}
+.hidden{display:none!important}
+</style>
+</head>
+<body>
+
+<!-- SIDEBAR -->
+<nav class="sidebar">
+  <div class="sidebar-logo">QA Chat<span>Tester</span></div>
+  <div class="nav-item active" data-page="dashboard" onclick="showPage('dashboard',this)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+    Dashboard
+  </div>
+  <div class="nav-item" data-page="conversations" onclick="showPage('conversations',this)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+    Conversaciones
+  </div>
+  <div class="nav-item" data-page="cases" onclick="showPage('cases',this)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+    Cases JSON
+  </div>
+  <div class="nav-item" data-page="run" onclick="showPage('run',this)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+    Ejecutar
+  </div>
+  <div class="sidebar-footer" id="sidebarStatus">● Conectado</div>
+</nav>
+
+<!-- MAIN -->
+<div class="main">
+  <div class="topbar">
+    <h1 id="pageTitle">Dashboard</h1>
+    <div>
+      <span class="status-dot" id="globalDot"></span>
+      <span id="globalStatus" style="font-size:12px;color:var(--muted)">Listo</span>
+    </div>
+  </div>
+  <div class="content" id="content">
+    <!-- dynamic content here -->
+  </div>
+</div>
+
+<!-- CONFIRM MODAL -->
+<div class="confirm-overlay hidden" id="confirmModal">
+  <div class="confirm-box">
+    <h3 id="confirmTitle">¿Confirmar acción?</h3>
+    <p id="confirmMsg"></p>
+    <div class="actions">
+      <button class="btn btn-ghost" onclick="closeConfirm()">Cancelar</button>
+      <button class="btn btn-danger" id="confirmOkBtn">Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── State ──────────────────────────────────────────────────────────────────
+let currentPage = 'dashboard';
+let pollTimer = null;
+let sseSource = null;
+let convList = [];
+let currentConvId = null;
+
+// ── Navigation ──────────────────────────────────────────────────────────────
+function showPage(name, el) {
+  currentPage = name;
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  el.classList.add('active');
+  const titles = {dashboard:'Dashboard', conversations:'Conversaciones', cases:'Cases JSON', run:'Ejecutar Batch'};
+  document.getElementById('pageTitle').textContent = titles[name] || name;
+  clearInterval(pollTimer);
+  if (sseSource) { sseSource.close(); sseSource = null; }
+  currentConvId = null;
+  render();
+}
+
+function render() {
+  const c = document.getElementById('content');
+  if (currentPage === 'dashboard')     renderDashboard(c);
+  else if (currentPage === 'conversations') renderConversations(c);
+  else if (currentPage === 'cases')    renderCases(c);
+  else if (currentPage === 'run')      renderRun(c);
+}
+
+// ── API helpers ──────────────────────────────────────────────────────────────
+async function api(method, path, body) {
+  const opts = { method, headers: { 'Content-Type': 'application/json' } };
+  if (body !== undefined) opts.body = JSON.stringify(body);
+  const r = await fetch(path, opts);
+  return r.json();
+}
+
+// ── DASHBOARD ─────────────────────────────────────────────────────────────────
+async function renderDashboard(c) {
+  c.innerHTML = `
+    <div class="stats-grid">
+      <div class="stat-card"><div class="label">Sesiones</div><div class="value accent" id="st-sessions">…</div></div>
+      <div class="stat-card"><div class="label">Mensajes</div><div class="value green" id="st-messages">…</div></div>
+      <div class="stat-card"><div class="label">Insights</div><div class="value teal" id="st-insights">…</div></div>
+      <div class="stat-card"><div class="label">Runs</div><div class="value warn" id="st-runs">…</div></div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        Últimas conversaciones
+        <div class="actions">
+          <button class="btn btn-ghost refresh-btn" onclick="refreshDashboard()">↻ Actualizar</button>
+          <button class="btn btn-danger refresh-btn" onclick="confirmClearDB()">🗑 Limpiar DB</button>
+        </div>
+      </div>
+      <div id="dash-conv-table">Cargando…</div>
+    </div>
+  `;
+  await refreshDashboard();
+  pollTimer = setInterval(refreshDashboard, 5000);
+}
+
+async function refreshDashboard() {
+  const [stats, convs] = await Promise.all([
+    api('GET', '/api/stats'),
+    api('GET', '/api/conversations'),
+  ]);
+  convList = convs;
+  document.getElementById('st-sessions').textContent = stats.sessions ?? '–';
+  document.getElementById('st-messages').textContent = stats.messages ?? '–';
+  document.getElementById('st-insights').textContent = stats.insights ?? '–';
+  document.getElementById('st-runs').textContent    = stats.runs ?? '–';
+
+  const el = document.getElementById('dash-conv-table');
+  if (!el) return;
+  if (!convs.length) { el.innerHTML = `<div class="empty-state">Sin conversaciones</div>`; return; }
+  el.innerHTML = `<table>
+    <thead><tr>
+      <th>Session</th><th>Escenario</th><th>Usuario</th>
+      <th>Mensajes</th><th>Insight</th><th>Último</th>
+    </tr></thead>
+    <tbody>
+    ${convs.slice(0,30).map(r => `<tr onclick="openConversation('${r.session_id}')">
+      <td style="font-family:monospace;font-size:11px">${r.session_id.slice(0,16)}…</td>
+      <td title="${r.scenario||''}">${r.scenario_group_id||'–'}</td>
+      <td>${r.user_id||'–'}</td>
+      <td><span class="badge badge-blue">${r.message_count}</span></td>
+      <td>${r.insight_complete===1?'<span class="badge badge-green">✓</span>':r.insight_complete===0&&r.insight_summary?'<span class="badge badge-gray">pendiente</span>':'<span class="badge badge-gray">–</span>'}</td>
+      <td style="color:var(--muted);font-size:11px">${fmtDate(r.last_message_at)}</td>
+    </tr>`).join('')}
+    </tbody></table>`;
+}
+
+function openConversation(sid) {
+  currentConvId = sid;
+  showPage('conversations', document.querySelector('[data-page="conversations"]'));
+}
+
+// ── CONVERSATIONS ──────────────────────────────────────────────────────────────
+async function renderConversations(c) {
+  if (currentConvId) {
+    renderConvDetail(c, currentConvId);
+    return;
+  }
+  c.innerHTML = `
+    <div class="card">
+      <div class="card-header">
+        Conversaciones
+        <div class="actions">
+          <button class="btn btn-ghost refresh-btn" onclick="loadConvList()">↻ Actualizar</button>
+          <a class="btn btn-success refresh-btn" href="/api/export/conversations" download="conversaciones.xlsx">⬇ Exportar Excel</a>
+        </div>
+      </div>
+      <div id="conv-list-wrap">Cargando…</div>
+    </div>`;
+  await loadConvList();
+  pollTimer = setInterval(loadConvList, 6000);
+}
+
+async function loadConvList() {
+  convList = await api('GET', '/api/conversations');
+  const el = document.getElementById('conv-list-wrap');
+  if (!el) return;
+  if (!convList.length) { el.innerHTML = `<div class="empty-state">Sin conversaciones</div>`; return; }
+  el.innerHTML = `<table>
+    <thead><tr>
+      <th>Session ID</th><th>Run ID</th><th>Escenario</th><th>Usuario</th>
+      <th>Msjs</th><th>Insight</th><th>Inicio</th><th>Último</th>
+    </tr></thead>
+    <tbody>
+    ${convList.map(r => `<tr onclick="openConvDetail('${r.session_id}')">
+      <td style="font-family:monospace;font-size:11px" title="${r.session_id}">${r.session_id.slice(0,20)}…</td>
+      <td style="font-family:monospace;font-size:11px">${r.run_id ? r.run_id.slice(0,14)+'…' : '–'}</td>
+      <td title="${r.scenario||''}">${r.scenario_group_id ? `<span class="badge badge-blue">${r.scenario_group_id}</span>` : '–'}</td>
+      <td>${r.user_id||'–'}</td>
+      <td><b>${r.message_count}</b></td>
+      <td>${r.insight_complete===1?'<span class="badge badge-green">✓ listo</span>':r.insight_summary?'<span class="badge badge-gray">parcial</span>':'–'}</td>
+      <td style="color:var(--muted);font-size:11px">${fmtDate(r.started_at)}</td>
+      <td style="color:var(--muted);font-size:11px">${fmtDate(r.last_message_at)}</td>
+    </tr>`).join('')}
+    </tbody></table>`;
+}
+
+function openConvDetail(sid) {
+  currentConvId = sid;
+  clearInterval(pollTimer);
+  renderConvDetail(document.getElementById('content'), sid);
+}
+
+async function renderConvDetail(c, sid) {
+  c.innerHTML = `
+    <button class="btn btn-ghost back-btn" onclick="backToConvList()">← Volver</button>
+    <div class="conv-detail" id="conv-detail-wrap">Cargando…</div>`;
+  await loadConvDetail(sid);
+  pollTimer = setInterval(() => loadConvDetail(sid), 4000);
+}
+
+async function loadConvDetail(sid) {
+  const data = await api('GET', `/api/conversations/${encodeURIComponent(sid)}`);
+  const el = document.getElementById('conv-detail-wrap');
+  if (!el) return;
+
+  const msgs = data.messages || [];
+  const insight = data.insight;
+
+  // Scroll-preserve
+  const prevScroll = el.querySelector('.conv-messages')?.scrollTop;
+  const wasAtBottom = prevScroll === undefined ? true :
+    el.querySelector('.conv-messages')?.scrollHeight - prevScroll < 400;
+
+  const meta = msgs[0] || {};
+  el.innerHTML = `
+    <div class="conv-header">
+      <span style="font-family:monospace;font-size:11px;color:var(--muted)">${sid}</span>
+      ${meta.scenario_group_id ? `<span class="badge badge-blue">${meta.scenario_group_id}</span>` : ''}
+      ${meta.scenario ? `<span class="tag">${meta.scenario}</span>` : ''}
+      ${meta.user_id ? `<span class="tag">user: ${meta.user_id}</span>` : ''}
+      ${meta.run_id ? `<span class="tag" style="font-family:monospace">run: ${meta.run_id.slice(0,12)}…</span>` : ''}
+      <span class="badge badge-blue" style="margin-left:auto">${msgs.length} mensajes</span>
+    </div>
+    <div class="conv-messages" id="msg-scroll">
+      ${msgs.map(m => msgBubble(m)).join('')}
+    </div>
+    ${insight ? `
+    <div class="insight-box">
+      <div class="insight-label">Análisis / Insight ${insight.complete ? '✓' : '(en progreso)'}</div>
+      <div style="white-space:pre-wrap">${escHtml(insight.analysis||'')}</div>
+      <div style="font-size:10px;color:var(--muted);margin-top:8px">${fmtDate(insight.created_at)}</div>
+    </div>` : ''}
+  `;
+
+  if (wasAtBottom) {
+    const scrollEl = el.querySelector('.conv-messages');
+    if (scrollEl) scrollEl.scrollTop = scrollEl.scrollHeight;
+  }
+}
+
+function msgBubble(m) {
+  let html = '';
+  if (m.message) {
+    html += `<div class="msg user">
+      <div class="msg-meta">Usuario · ${fmtDate(m.created_at)}</div>
+      <div class="msg-bubble">${escHtml(m.message)}</div>
+    </div>`;
+  }
+  if (m.response) {
+    html += `<div class="msg bot">
+      <div class="msg-meta">Bot · ${fmtDate(m.updated_at || m.created_at)}</div>
+      <div class="msg-bubble">${escHtml(m.response)}</div>
+    </div>`;
+  }
+  return html;
+}
+
+function backToConvList() {
+  clearInterval(pollTimer);
+  currentConvId = null;
+  renderConversations(document.getElementById('content'));
+}
+
+// ── CASES ──────────────────────────────────────────────────────────────────────
+async function renderCases(c) {
+  c.innerHTML = `
+    <div class="editor-wrap">
+      <div class="editor-toolbar">
+        <button class="btn btn-ghost" onclick="formatCases()">{ } Formatear</button>
+        <button class="btn btn-success" onclick="saveCases()">💾 Guardar</button>
+        <span class="editor-status" id="cases-status"></span>
+      </div>
+      <textarea class="code" id="cases-editor" spellcheck="false" placeholder="Cargando…"></textarea>
+    </div>`;
+  const data = await api('GET', '/api/cases');
+  const ta = document.getElementById('cases-editor');
+  if (ta) {
+    try { ta.value = JSON.stringify(JSON.parse(data.content), null, 2); }
+    catch { ta.value = data.content || '[]'; }
+  }
+}
+
+function formatCases() {
+  const ta = document.getElementById('cases-editor');
+  if (!ta) return;
+  try {
+    ta.value = JSON.stringify(JSON.parse(ta.value), null, 2);
+    setStatus('cases-status', '✓ Formateado', 'var(--green)');
+  } catch(e) {
+    setStatus('cases-status', '✗ JSON inválido: ' + e.message, 'var(--red)');
+  }
+}
+
+async function saveCases() {
+  const ta = document.getElementById('cases-editor');
+  if (!ta) return;
+  try {
+    JSON.parse(ta.value); // validate
+  } catch(e) {
+    setStatus('cases-status', '✗ JSON inválido', 'var(--red)');
+    return;
+  }
+  const res = await api('PUT', '/api/cases', { content: ta.value });
+  if (res.ok) setStatus('cases-status', '✓ Guardado', 'var(--green)');
+  else setStatus('cases-status', '✗ ' + (res.error||'Error'), 'var(--red)');
+}
+
+// ── RUN ──────────────────────────────────────────────────────────────────────
+async function renderRun(c) {
+  c.innerHTML = `
+    <div class="run-form">
+      <div class="section-title">Parámetros</div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>JSON File</label>
+          <input id="run-json-file" value="cases.json"/>
+        </div>
+        <div class="form-group">
+          <label>Batch Size</label>
+          <input id="run-batch-size" type="number" value="20"/>
+        </div>
+        <div class="form-group">
+          <label>Max Workers</label>
+          <input id="run-max-workers" type="number" value="10"/>
+        </div>
+      </div>
+      <div style="display:flex;gap:10px;align-items:center">
+        <button class="btn btn-primary" id="run-btn" onclick="startRun()">▶ Ejecutar</button>
+        <button class="btn btn-danger" id="stop-btn" onclick="stopRun()" disabled>■ Detener</button>
+        <span id="run-status-label" class="run-status" style="color:var(--muted)">–</span>
+      </div>
+    </div>
+    <div class="terminal-header">
+      <div class="section-title" style="margin:0">Output</div>
+      <button class="btn btn-ghost refresh-btn" onclick="clearTerminal()">Limpiar</button>
+    </div>
+    <div class="terminal" id="terminal"></div>
+  `;
+  await refreshRunStatus();
+  pollTimer = setInterval(refreshRunStatus, 3000);
+}
+
+async function startRun() {
+  const jsonFile   = document.getElementById('run-json-file')?.value || 'cases.json';
+  const batchSize  = parseInt(document.getElementById('run-batch-size')?.value || '20');
+  const maxWorkers = parseInt(document.getElementById('run-max-workers')?.value || '10');
+
+  const res = await api('POST', '/api/run', { json_file: jsonFile, batch_size: batchSize, max_workers: maxWorkers });
+  if (res.error) { addTermLine('ERROR: ' + res.error, 'err'); return; }
+
+  clearTerminal();
+  addTermLine(`▶ Iniciando: python batch_runner.py json_file=${jsonFile} batch_size=${batchSize} max_workers=${maxWorkers}`, 'info');
+
+  if (sseSource) { sseSource.close(); sseSource = null; }
+  sseSource = new EventSource('/api/run/stream');
+  sseSource.onmessage = e => {
+    if (e.data === 'null') return;
+    addTermLine(JSON.parse(e.data));
+  };
+  sseSource.addEventListener('done', () => {
+    sseSource.close(); sseSource = null;
+    refreshRunStatus();
+  });
+  sseSource.onerror = () => { sseSource?.close(); sseSource = null; };
+
+  setRunButtons(true);
+}
+
+async function stopRun() {
+  const res = await api('POST', '/api/run/stop', {});
+  addTermLine(res.message || res.error || '?', res.error ? 'err' : 'ok');
+}
+
+async function refreshRunStatus() {
+  const s = await api('GET', '/api/run/status');
+  if (!s) return;
+  const label = document.getElementById('run-status-label');
+  if (label) {
+    if (s.running) {
+      label.innerHTML = `<span class="pulse" style="color:var(--green)">●</span> Corriendo (líneas: ${s.lines})`;
+    } else if (s.returncode === 0) {
+      label.innerHTML = `<span style="color:var(--green)">✓</span> Completado OK`;
+    } else if (s.returncode !== null) {
+      label.innerHTML = `<span style="color:var(--red)">✗</span> Falló (rc=${s.returncode})`;
+    } else {
+      label.textContent = '–';
+    }
+  }
+  setRunButtons(s.running);
+  // If run just ended and we have an SSE open, check
+  if (!s.running && sseSource) { sseSource.close(); sseSource = null; }
+}
+
+function setRunButtons(running) {
+  const rb = document.getElementById('run-btn');
+  const sb = document.getElementById('stop-btn');
+  if (rb) rb.disabled = running;
+  if (sb) sb.disabled = !running;
+}
+
+function addTermLine(text, cls = '') {
+  const t = document.getElementById('terminal');
+  if (!t) return;
+  const line = document.createElement('div');
+  line.className = 't-line ' + (
+    cls || (text.includes('ERROR') || text.includes('FAIL') ? 'err' :
+            text.includes('OK') || text.includes('✓') ? 'ok' :
+            text.includes('INFO') || text.includes('Batch') ? 'info' : '')
+  );
+  line.textContent = text;
+  t.appendChild(line);
+  t.scrollTop = t.scrollHeight;
+}
+
+function clearTerminal() {
+  const t = document.getElementById('terminal');
+  if (t) t.innerHTML = '';
+}
+
+// ── DB CLEAR ──────────────────────────────────────────────────────────────────
+function confirmClearDB() {
+  showConfirm(
+    '¿Limpiar toda la base de datos?',
+    'Se eliminarán TODOS los logs e insights. Esta acción no se puede deshacer.',
+    async () => {
+      const res = await api('DELETE', '/api/db');
+      if (res.ok) {
+        setGlobalStatus('DB limpiada', false);
+        if (currentPage === 'dashboard') refreshDashboard();
+      }
+    }
+  );
+}
+
+// ── Confirm modal ──────────────────────────────────────────────────────────────
+let _confirmCb = null;
+function showConfirm(title, msg, cb) {
+  _confirmCb = cb;
+  document.getElementById('confirmTitle').textContent = title;
+  document.getElementById('confirmMsg').textContent = msg;
+  document.getElementById('confirmModal').classList.remove('hidden');
+}
+function closeConfirm() { document.getElementById('confirmModal').classList.add('hidden'); _confirmCb = null; }
+document.getElementById('confirmOkBtn').onclick = () => { closeConfirm(); _confirmCb && _confirmCb(); };
+
+// ── Utils ──────────────────────────────────────────────────────────────────────
+function fmtDate(iso) {
+  if (!iso) return '–';
+  try {
+    const d = new Date(iso);
+    return d.toLocaleString('es', { dateStyle:'short', timeStyle:'short' });
+  } catch { return iso; }
+}
+
+function escHtml(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
+}
+
+function setStatus(id, msg, color) {
+  const el = document.getElementById(id);
+  if (el) { el.textContent = msg; el.style.color = color; }
+  setTimeout(() => { if (el) el.textContent = ''; }, 4000);
+}
+
+function setGlobalStatus(msg, running = false) {
+  document.getElementById('globalStatus').textContent = msg;
+  document.getElementById('globalDot').className = 'status-dot' + (running ? '' : '');
+}
+
+// ── Boot ──────────────────────────────────────────────────────────────────────
+render();
+</script>
+</body>
+</html>
