@@ -119,6 +119,27 @@ tr:hover td{background:var(--surface2);cursor:pointer}
 .raw-body pre{font-family:'JetBrains Mono','Fira Code',monospace;font-size:11.5px;
               line-height:1.65;color:#e6edf3;background:#0d1117;padding:14px;
               border-radius:8px;white-space:pre-wrap;word-break:break-all;margin:0}
+/* media attachments */
+.tl-media{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
+.tl-thumb{width:80px;height:80px;border-radius:8px;object-fit:cover;cursor:pointer;
+          border:2px solid var(--border);transition:.15s}
+.tl-thumb:hover{border-color:var(--accent);transform:scale(1.04)}
+.tl-file{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;
+         background:var(--surface2);border:1px solid var(--border);border-radius:7px;
+         font-size:12px;color:var(--text);cursor:pointer;text-decoration:none;transition:.15s}
+.tl-file:hover{border-color:var(--accent);color:var(--accent)}
+.tl-file-icon{font-size:16px;line-height:1}
+/* lightbox */
+.lb-overlay{position:fixed;inset:0;background:rgba(0,0,0,.92);display:flex;
+            align-items:center;justify-content:center;z-index:300;padding:20px;cursor:zoom-out}
+.lb-inner{position:relative;max-width:95vw;max-height:90vh;display:flex;flex-direction:column;align-items:center;gap:10px}
+.lb-img{max-width:100%;max-height:82vh;border-radius:8px;object-fit:contain;box-shadow:0 8px 40px #000}
+.lb-pdf{width:90vw;height:85vh;border:none;border-radius:8px}
+.lb-bar{display:flex;align-items:center;gap:12px}
+.lb-caption{color:#ccc;font-size:12px;max-width:60vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lb-close{background:rgba(255,255,255,.15);border:none;color:#fff;border-radius:50%;
+          width:32px;height:32px;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.lb-close:hover{background:rgba(255,255,255,.3)}
 .insight-box{margin:16px;padding:14px;background:rgba(0,212,170,.06);border:1px solid rgba(0,212,170,.25);
              border-radius:10px;color:var(--text);line-height:1.6;font-size:13px}
 .insight-box .insight-label{font-size:10px;text-transform:uppercase;letter-spacing:.07em;
@@ -239,6 +260,19 @@ textarea.code{width:100%;background:#0d1117;color:#e6edf3;border:none;padding:16
     <div class="raw-body">
       <pre id="rawModalContent"></pre>
     </div>
+  </div>
+</div>
+
+<div class="lb-overlay hidden" id="lbModal" onclick="closeLb(event)">
+  <div class="lb-inner" onclick="event.stopPropagation()">
+    <div class="lb-bar">
+      <span class="lb-caption" id="lbCaption"></span>
+      <a id="lbDownload" href="#" download target="_blank"
+         class="btn btn-ghost" style="padding:4px 10px;font-size:11px">⬇ Descargar</a>
+      <button class="lb-close" onclick="closeLb()">✕</button>
+    </div>
+    <img id="lbImg" class="lb-img hidden" src="" alt=""/>
+    <iframe id="lbPdf" class="lb-pdf hidden" src=""></iframe>
   </div>
 </div>
 
@@ -501,7 +535,6 @@ function msgBubble(m, idx) {
   const n = idx + 1;
   const rawKey = `raw_${n}`;
 
-  // Store raw for modal access
   if (m.raw_response !== undefined && m.raw_response !== null) {
     _rawStore[rawKey] = m.raw_response;
   }
@@ -510,10 +543,16 @@ function msgBubble(m, idx) {
   const turnNumEl = `<span class="tl-turn-num" title="Turno ${n}${hasRaw ? ' · click para ver raw_response' : ''}"
     ${hasRaw ? `onclick="openRawModal(${n})"` : ''}>${n}</span>`;
 
+  // ── media ──
+  const images   = parseJsonField(m.images);
+  const files    = parseJsonField(m.files);
+  const mediaHtml = renderMedia(images, files);
+
   const userRow = m.message ? `
     <div class="tl-row user">
       <div class="tl-who user">Usuario <span class="tl-time">${fmtDate(m.created_at)}</span></div>
       <div class="tl-text">${escHtml(m.message)}</div>
+      ${mediaHtml ? `<div class="tl-media">${mediaHtml}</div>` : ''}
     </div>` : '';
 
   const botRow = m.response ? `
@@ -527,6 +566,90 @@ function msgBubble(m, idx) {
     ${userRow}${botRow}
   </div>`;
 }
+
+function parseJsonField(val) {
+  if (!val) return [];
+  if (Array.isArray(val)) return val;
+  try { return JSON.parse(val) || []; } catch { return []; }
+}
+
+function renderMedia(images, files) {
+  let html = '';
+
+  for (const img of images) {
+    const url = typeof img === 'string' ? img : (img.url || img.src || '');
+    if (!url) continue;
+    const ext = url.split('?')[0].split('.').pop().toLowerCase();
+    if (ext === 'pdf') {
+      html += fileChip(url, '📄', url.split('/').pop() || 'documento.pdf');
+    } else {
+      html += `<img class="tl-thumb" src="${escAttr(url)}" alt="imagen"
+                    onclick="openLb('${escAttr(url)}','imagen')"
+                    onerror="this.style.display='none'"/>`;
+    }
+  }
+
+  for (const f of files) {
+    const url  = typeof f === 'string' ? f : (f.url || f.path || f.src || '');
+    const name = typeof f === 'string' ? url.split('/').pop() : (f.name || f.filename || url.split('/').pop() || 'archivo');
+    if (!url) continue;
+    const ext  = url.split('?')[0].split('.').pop().toLowerCase();
+    const icon = ext === 'pdf' ? '📄' : ['jpg','jpeg','png','gif','webp'].includes(ext) ? '🖼' : '📎';
+    if (['jpg','jpeg','png','gif','webp'].includes(ext)) {
+      html += `<img class="tl-thumb" src="${escAttr(url)}" alt="${escHtml(name)}"
+                    onclick="openLb('${escAttr(url)}','${escAttr(name)}')"
+                    onerror="this.style.display='none'"/>`;
+    } else {
+      html += fileChip(url, icon, name);
+    }
+  }
+
+  return html;
+}
+
+function fileChip(url, icon, name) {
+  const ext = url.split('?')[0].split('.').pop().toLowerCase();
+  const handler = ext === 'pdf'
+    ? `onclick="openLb('${escAttr(url)}','${escAttr(name)}');return false;"`
+    : `target="_blank"`;
+  return `<a href="${escAttr(url)}" class="tl-file" ${handler}>
+    <span class="tl-file-icon">${icon}</span>${escHtml(name.length > 30 ? name.slice(0,27)+'…' : name)}
+  </a>`;
+}
+
+function escAttr(s) {
+  return String(s||'').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+// ── Lightbox ──────────────────────────────────────────────────────────────────
+function openLb(url, caption) {
+  const ext = url.split('?')[0].split('.').pop().toLowerCase();
+  const isPdf = ext === 'pdf';
+  document.getElementById('lbCaption').textContent   = caption || '';
+  document.getElementById('lbDownload').href         = url;
+  document.getElementById('lbImg').classList.toggle('hidden', isPdf);
+  document.getElementById('lbPdf').classList.toggle('hidden', !isPdf);
+  if (isPdf) {
+    document.getElementById('lbPdf').src = url;
+  } else {
+    document.getElementById('lbImg').src = url;
+  }
+  document.getElementById('lbModal').classList.remove('hidden');
+}
+
+function closeLb(e) {
+  if (e && e.target !== document.getElementById('lbModal')) return;
+  document.getElementById('lbModal').classList.add('hidden');
+  document.getElementById('lbImg').src = '';
+  document.getElementById('lbPdf').src = '';
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    closeLb();
+    closeRawModal();
+  }
+});
 
 function openRawModal(n) {
   const raw = _rawStore[`raw_${n}`];
