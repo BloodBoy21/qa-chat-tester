@@ -408,10 +408,13 @@ async function loadConvDetail(sid) {
   const msgs = data.messages || [];
   const insight = data.insight;
 
-  // Scroll-preserve
-  const prevScroll = el.querySelector('.conv-messages')?.scrollTop;
-  const wasAtBottom = prevScroll === undefined ? true :
-    el.querySelector('.conv-messages')?.scrollHeight - prevScroll < 400;
+  // Capture scroll state BEFORE replacing innerHTML
+  const oldScroll = el.querySelector('.conv-messages');
+  const isFirstLoad = !oldScroll;
+  const atBottom = isFirstLoad || (
+    oldScroll.scrollHeight - oldScroll.scrollTop - oldScroll.clientHeight < 60
+  );
+  const savedTop = oldScroll?.scrollTop ?? 0;
 
   const meta = msgs[0] || {};
   el.innerHTML = `
@@ -434,9 +437,12 @@ async function loadConvDetail(sid) {
     </div>` : ''}
   `;
 
-  if (wasAtBottom) {
-    const scrollEl = el.querySelector('.conv-messages');
-    if (scrollEl) scrollEl.scrollTop = scrollEl.scrollHeight;
+  // Restore scroll after paint so scrollHeight is accurate
+  const newScroll = el.querySelector('.conv-messages');
+  if (newScroll) {
+    requestAnimationFrame(() => {
+      newScroll.scrollTop = atBottom ? newScroll.scrollHeight : savedTop;
+    });
   }
 }
 
