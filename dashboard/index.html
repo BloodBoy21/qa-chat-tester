@@ -107,6 +107,11 @@ tr:hover td{background:var(--surface2);cursor:pointer}
              font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center;
              cursor:pointer;transition:.15s;user-select:none}
 .tl-turn-num:hover{background:var(--accent);border-color:var(--accent);color:#fff}
+/* campaign trigger banner */
+.tl-campaign{display:flex;align-items:center;gap:6px;padding:5px 10px;margin-bottom:4px;
+             background:rgba(0,212,170,.07);border:1px solid rgba(0,212,170,.25);
+             border-radius:6px;font-size:11px;color:var(--accent2);font-weight:600}
+.tl-campaign-label{font-weight:400;color:var(--muted);margin-left:2px}
 /* raw modal */
 .raw-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);display:flex;align-items:center;
              justify-content:center;z-index:200;padding:20px}
@@ -655,6 +660,21 @@ function msgBubble(m, idx) {
   const files    = parseJsonField(m.files);
   const mediaHtml = renderMedia(images, files);
 
+  // ── campaign trigger banner ──
+  const msgCamps = (() => {
+    try {
+      const c = m.campaigns;
+      if (!c) return [];
+      return Array.isArray(c) ? c : JSON.parse(c);
+    } catch { return []; }
+  })();
+  const campaignBanner = msgCamps.length ? `
+    <div class="tl-campaign">
+      [Campaña]
+      ${msgCamps.map(c => `<span title="ID: ${escHtml(c.campaign_id||'')} | Template: ${escHtml(c.whatsapp_template_name||'')}">${escHtml(c.campaign_name || c.campaign_id || '?')}</span>`).join(', ')}
+      <span class="tl-campaign-label">— el usuario responde a este mensaje de campaña</span>
+    </div>` : '';
+
   const userRow = m.message ? `
     <div class="tl-row user">
       <div class="tl-who user">Usuario <span class="tl-time">${fmtDate(m.created_at)}</span></div>
@@ -670,7 +690,7 @@ function msgBubble(m, idx) {
 
   return `<div class="tl-turn">
     ${turnNumEl}
-    ${userRow}${botRow}
+    ${campaignBanner}${userRow}${botRow}
   </div>`;
 }
 

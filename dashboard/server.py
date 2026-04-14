@@ -353,7 +353,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         out = []
         for m in msgs:
             row = dict(m)
-            for f in ("raw_response", "files", "images"):
+            for f in ("raw_response", "files", "images", "campaigns"):
                 if row.get(f):
                     try:
                         row[f] = json.loads(row[f])
@@ -370,58 +370,59 @@ class Handler(http.server.BaseHTTPRequestHandler):
         conn = _db()
         rows = conn.execute("""
             SELECT
-                l.message,
-                l.response,
-                l.raw_response,
-                l.files,
-                l.images,
-                l.campaigns,
+                l.session_id,
+                l.run_id,
                 l.user_id,
-                i.analysis,
-                i.complete,
                 l.scenario_group_id,
                 l.scenario,
-                l.run_id
+                l.message,
+                l.response,
+                l.campaigns,
+                i.analysis,
+                i.complete,
+                l.created_at
             FROM logs l
             LEFT JOIN insights i ON i.run_id = l.run_id
             WHERE l.message IS NOT NULL
-            ORDER BY l.run_id
+            ORDER BY l.run_id, l.created_at
         """).fetchall()
         conn.close()
 
         headers = [
-            "message", "response", "raw_response", "files", "images", "campaigns",
-            "user_id", "analysis", "complete", "scenario_group_id", "scenario", "run_id",
+            "session_id", "run_id", "user_id", "scenario_group_id", "scenario",
+            "message", "response", "campaign", "analysis", "complete", "created_at",
         ]
 
-        def _clean(col: str, val):
-            """Decode JSON-encoded columns so Excel shows clean text, not escaped strings."""
-            if val is None:
-                return None
-            if col in ("raw_response", "files", "images"):
-                try:
-                    parsed = json.loads(val)
-                    if isinstance(parsed, str):
-                        parsed = json.loads(parsed)
-                    return json.dumps(parsed, ensure_ascii=False, indent=2)
-                except Exception:
-                    pass
-            if col == "campaigns":
-                try:
-                    camps = json.loads(val)
-                    if isinstance(camps, list):
-                        return ", ".join(
-                            c.get("campaign_name", c.get("campaign_id", str(c)))
-                            for c in camps if isinstance(c, dict)
-                        ) or val
-                except Exception:
-                    pass
-            return val
+        def _parse_campaigns(val) -> str:
+            if not val:
+                return ""
+            try:
+                camps = json.loads(val) if isinstance(val, str) else val
+                if isinstance(camps, list) and camps:
+                    return " | ".join(
+                        c.get("campaign_name", c.get("campaign_id", str(c)))
+                        for c in camps if isinstance(c, dict)
+                    )
+            except Exception:
+                pass
+            return ""
 
-        data = [
-            [_clean(headers[i], v) for i, v in enumerate(dict(r).values())]
-            for r in rows
-        ]
+        data = []
+        for r in rows:
+            row = dict(r)
+            data.append([
+                row.get("session_id", ""),
+                row.get("run_id", ""),
+                row.get("user_id", ""),
+                row.get("scenario_group_id", ""),
+                row.get("scenario", ""),
+                row.get("message", ""),
+                row.get("response", ""),
+                _parse_campaigns(row.get("campaigns")),
+                row.get("analysis", ""),
+                "SI" if row.get("complete") else "NO",
+                row.get("created_at", ""),
+            ])
         xlsx = _build_xlsx(headers, data)
 
         self.send_response(200)
