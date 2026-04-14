@@ -20,6 +20,7 @@ from utils.agent_runner import Agent as AgentRunner
 from utils.prompt_utils import extract_json_blocks
 
 MAX_ANALYSIS_RETRIES = int(os.getenv("MAX_ANALYSIS_RETRIES", 3))
+MAX_CONV_RETRIES = int(os.getenv("MAX_CONV_RETRIES", 3))
 DEFAULT_MODEL = os.getenv("MODEL_NAME", "gemini-2.5-flash")
 
 # Timeout per individual LLM call (seconds). Prevents a single hung API call
@@ -34,6 +35,10 @@ RUN_TIMEOUT = int(os.getenv("RUN_TIMEOUT", 600))
 ANALYSIS_TIMEOUT = int(os.getenv("ANALYSIS_TIMEOUT", 120))
 
 MAX_CHAT_ITERATIONS = int(os.getenv("MAX_CHAT_ITERATIONS", 20))
+
+# Max agents running concurrently within a single process.
+# Prevents Gemini API rate-limit errors when batch_size is large.
+MAX_CONCURRENT_AGENTS = int(os.getenv("MAX_CONCURRENT_AGENTS", 3))
 
 
 # ── CLI args ─────────────────────────────────────────────────────────────────
@@ -142,44 +147,43 @@ def generate_run_id():
     return str(uuid.uuid4())
 
 
-async def run_agent(
+async def _conversation_attempt(
     context: str,
     user_id: str,
     model: str,
-    batch=None,
-    item_index: int = None,
-    total_items: int = None,
-):
+    run_id: str,
+    item_label: str,
+    attempt: int,
+) -> tuple[bool, object]:
+    """
+    Run one full conversation attempt.
+    Returns (got_messages: bool, analysis_agent_built).
+    got_messages=True means at least one send_to_agent call succeeded.
+    """
     log_db = LogDB()
-    run_id = generate_run_id()
-    item_label = (
-        f"[Batch {batch} | Item {item_index + 1}/{total_items}]"
-        if item_index is not None
-        else "[Single]"
-    )
-    item_start = datetime.datetime.now()
 
-    logger.info(f"{item_label} Starting agent | user_id={user_id} | model={model}")
+    analysis_agent_obj = AnalysisAgent(context=context, user_id=user_id, model=model)
+    analysis_agent_obj.set_run_id(run_id)
+    analysis_agent_built = analysis_agent_obj.Build()
 
-    analysis_agent = AnalysisAgent(context=context, user_id=user_id, model=model)
-    analysis_agent.set_run_id(run_id)
-    analysis_agent = analysis_agent.Build()
     user_agent = UserAgent(
         context=context,
         user_id=user_id,
         model=model,
-        sub_agents=[analysis_agent],
+        sub_agents=[analysis_agent_built],
     )
     user_agent.set_run_id(run_id)
     agent = user_agent.Build()
+
     runner = AgentRunner(user_id=user_id, agent=agent)
     await runner.generate()
-    conversation_loop = True
+
     previous_response = None
     iteration_count = 0
+    max_iterations = int(MAX_CHAT_ITERATIONS)
+
     try:
-        max_iterations = int(MAX_CHAT_ITERATIONS)
-        while conversation_loop:
+        while True:
             iteration_count += 1
             iter_start = datetime.datetime.now()
 
@@ -189,15 +193,15 @@ async def run_agent(
 
             iter_elapsed = (datetime.datetime.now() - iter_start).total_seconds()
             logger.debug(
-                f"{item_label} Iteration {iteration_count} | "
-                f"Duration: {fmt_duration(iter_elapsed)}"
+                f"{item_label} [A{attempt}] Iter {iteration_count} | {fmt_duration(iter_elapsed)}"
             )
 
             if res is None or res.strip() == "" or res.strip() == "{}":
                 logger.error(
-                    f"{item_label} No response at iteration {iteration_count}."
+                    f"{item_label} [A{attempt}] No response at iteration {iteration_count}."
                 )
                 break
+
             res_json = extract_json_blocks(res)
             if (
                 res_json.get("conversation_end", False)
@@ -205,53 +209,123 @@ async def run_agent(
                 or "insights" in res
             ):
                 logger.info(
-                    f"{item_label} Conversation ended by agent at iteration {iteration_count}."
+                    f"{item_label} [A{attempt}] Conversation ended at iteration {iteration_count}."
                 )
-                conversation_loop = False
                 break
+
             previous_response = res
             max_iterations -= 1
             if max_iterations <= 0:
                 logger.info(
-                    f"{item_label} Max iterations reached ({iteration_count} total)."
+                    f"{item_label} [A{attempt}] Max iterations reached ({iteration_count})."
                 )
                 break
-            pass  # no delay needed; each LLM call already takes several seconds
 
     except KeyboardInterrupt:
-        logger.info(f"{item_label} Interrupted by user.")
+        raise
     except Exception as e:
-        logger.error(f"{item_label} Error at iteration {iteration_count}: {e}")
-    finally:
-        has_analysis = log_db.insight_exists_by_run_id(run_id)
-        if not has_analysis:
-            logger.warning(
-                f"{item_label} No analysis for run_id {run_id}. Running AnalysisAgent fallback."
-            )
-            await run_analysis_agent(analysis_agent, run_id, user_id, context)
+        logger.error(f"{item_label} [A{attempt}] Error at iteration {iteration_count}: {e}")
 
-        # Absolute last resort: if still no analysis after all retries and manual fallback
-        if not log_db.insight_exists_by_run_id(run_id):
-            fallback_sid = log_db.get_session_id_by_run_id(run_id) or run_id
+    got_messages = len(log_db.get_by_run_id(run_id)) > 0
+    return got_messages, analysis_agent_built
+
+
+async def run_agent(
+    context: str,
+    user_id: str,
+    model: str,
+    batch=None,
+    item_index: int = None,
+    total_items: int = None,
+):
+    item_label = (
+        f"[Batch {batch} | Item {item_index + 1}/{total_items}]"
+        if item_index is not None
+        else "[Single]"
+    )
+    item_start = datetime.datetime.now()
+    log_db = LogDB()
+
+    logger.info(f"{item_label} Starting | user_id={user_id} | model={model}")
+
+    final_run_id = None
+    final_analysis_agent = None
+
+    for attempt in range(1, MAX_CONV_RETRIES + 1):
+        run_id = generate_run_id()
+        final_run_id = run_id
+
+        try:
+            got_messages, analysis_agent = await _conversation_attempt(
+                context=context,
+                user_id=user_id,
+                model=model,
+                run_id=run_id,
+                item_label=item_label,
+                attempt=attempt,
+            )
+            final_analysis_agent = analysis_agent
+        except KeyboardInterrupt:
+            logger.info(f"{item_label} Interrupted.")
+            break
+        except Exception as e:
+            logger.error(f"{item_label} [A{attempt}] Unexpected error: {e}")
+            got_messages = False
+
+        if got_messages:
+            logger.info(f"{item_label} [A{attempt}] Conversation produced messages. OK.")
+            break
+
+        # No messages generated — decide whether to retry
+        if attempt < MAX_CONV_RETRIES:
+            backoff = 2 ** attempt  # 2s, 4s
+            logger.warning(
+                f"{item_label} [A{attempt}] No messages. "
+                f"Retrying in {backoff}s... ({MAX_CONV_RETRIES - attempt} left)"
+            )
+            await asyncio.sleep(backoff)
+        else:
+            ctx_preview = str(context)[:300] if context else "N/A"
+            logger.error(
+                f"{item_label} All {MAX_CONV_RETRIES} attempts failed. "
+                f"Saving failure record. Context preview: {ctx_preview}"
+            )
             save_analysis(
-                session_id=fallback_sid,
+                session_id=run_id,
                 run_id=run_id,
                 analysis=json.dumps({
-                    "insights": "No se pudo generar análisis: la conversación no produjo mensajes o todos los intentos fallaron.",
+                    "insights": (
+                        f"Fallo tras {MAX_CONV_RETRIES} intentos: el agente no generó "
+                        f"mensajes en ningún intento (final=True, has_content=False). "
+                        f"Contexto: {ctx_preview}"
+                    ),
                     "complete": False,
                 }),
             )
-            logger.warning(
-                f"{item_label} Emergency fallback analysis saved for run_id {run_id}."
-            )
 
-        item_elapsed = (datetime.datetime.now() - item_start).total_seconds()
-        logger.info(
-            f"{item_label} DONE | "
-            f"Iterations: {iteration_count} | "
-            f"Duration: {fmt_duration(item_elapsed)} | "
-            f"Avg/iteration: {fmt_duration(item_elapsed / max(iteration_count, 1))}"
-        )
+    # ── Post-run: ensure analysis exists ─────────────────────────────────────
+    if final_run_id:
+        has_analysis = log_db.insight_exists_by_run_id(final_run_id)
+        if not has_analysis:
+            logger.warning(
+                f"{item_label} No analysis for run_id {final_run_id}. Running AnalysisAgent fallback."
+            )
+            await run_analysis_agent(final_analysis_agent, final_run_id, user_id, context)
+
+        if not log_db.insight_exists_by_run_id(final_run_id):
+            fallback_sid = log_db.get_session_id_by_run_id(final_run_id) or final_run_id
+            save_analysis(
+                session_id=fallback_sid,
+                run_id=final_run_id,
+                analysis=json.dumps({
+                    "insights": "No se pudo generar análisis tras todos los intentos.",
+                    "complete": False,
+                }),
+            )
+            logger.warning(f"{item_label} Emergency analysis saved for run_id {final_run_id}.")
+
+    item_elapsed = (datetime.datetime.now() - item_start).total_seconds()
+    logger.info(f"{item_label} DONE | Duration: {fmt_duration(item_elapsed)}")
 
 
 # ── Batch run ─────────────────────────────────────────────────────────────────
@@ -297,17 +371,20 @@ async def run_from_json_file(
             f"Size: {len(batch)}"
         )
 
-        tasks = [
-            run_agent(
-                context=turn,
-                user_id=turn.get("user_id", "default_user"),
-                model=turn.get("model", DEFAULT_MODEL),
-                batch=batch_num,
-                item_index=i + idx,
-                total_items=total_items,
-            )
-            for idx, turn in enumerate(batch)
-        ]
+        sem = asyncio.Semaphore(MAX_CONCURRENT_AGENTS)
+
+        async def _run_with_sem(turn, idx):
+            async with sem:
+                return await run_agent(
+                    context=turn,
+                    user_id=turn.get("user_id", "default_user"),
+                    model=turn.get("model", DEFAULT_MODEL),
+                    batch=batch_num,
+                    item_index=i + idx,
+                    total_items=total_items,
+                )
+
+        tasks = [_run_with_sem(turn, idx) for idx, turn in enumerate(batch)]
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
         batch_elapsed = (datetime.datetime.now() - batch_start).total_seconds()

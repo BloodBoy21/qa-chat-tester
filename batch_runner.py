@@ -65,7 +65,8 @@ def load_and_split(file_path: str, batch_size: int, max_items: int = 0) -> list[
 def run_batch_subprocess(batch_index: int, batch_file: str) -> dict:
     """
     Spawn `python main.py json_file=<tmp_batch_file> ...forwarded_args`
-    and capture output. Returns a result dict.
+    and stream output line-by-line to stdout (visible in dashboard).
+    Returns a result dict.
     """
     cmd = [
         sys.executable,
@@ -79,22 +80,25 @@ def run_batch_subprocess(batch_index: int, batch_file: str) -> dict:
     logger.info(f"[Batch {batch_index}] Launching: {' '.join(cmd)}")
     start = datetime.datetime.now()
 
-    result = subprocess.run(
+    proc = subprocess.Popen(
         cmd,
-        capture_output=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,   # merge stderr into stdout
         text=True,
         env={**os.environ, "MODEL_NAME": MODEL},
     )
 
+    for line in proc.stdout:
+        print(f"[B{batch_index}] {line}", end="", flush=True)
+
+    proc.wait()
     elapsed = (datetime.datetime.now() - start).total_seconds()
 
     return {
         "batch_index": batch_index,
         "batch_file": batch_file,
-        "returncode": result.returncode,
+        "returncode": proc.returncode,
         "elapsed_seconds": elapsed,
-        "stdout_tail": result.stdout[-2000:] if result.stdout else "",
-        "stderr_tail": result.stderr[-2000:] if result.stderr else "",
     }
 
 
@@ -146,10 +150,8 @@ def main():
                     logger.info(
                         f"[Batch {res['batch_index']}] {status} in {res['elapsed_seconds']:.1f}s"
                     )
-                    if res["returncode"] != 0 and res["stderr_tail"]:
-                        logger.error(
-                            f"[Batch {res['batch_index']}] stderr:\n{res['stderr_tail']}"
-                        )
+                    if res["returncode"] != 0:
+                        logger.error(f"[Batch {res['batch_index']}] FAIL rc={res['returncode']} (output streamed above)")
                 except Exception as e:
                     logger.error(f"[Batch {batch_idx}] Exception: {e}")
                     results.append(
