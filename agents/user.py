@@ -71,7 +71,7 @@ class UserAgent(AgentBase):
 
     ¿Qué es una campaña?: Cuando el escenario mencione que el usuario recibe una
     campaña, se usa la campaña correspondiente para inyectar un mensaje de plantilla
-    de WhatsApp solicitando información específica al usuario.
+    de WhatsApp solicitando información específica al usuario. Esto significa que se debe enviar en la tool `send_to_agent` el array de `campaigns` con la campaña correspondiente, y el mensaje de `bot_message` se genera a partir del campo `content` de la campaña, simulando un mensaje previo del bot para el turno actual. Esto hace que la conversación sea más realista, ya que el usuario estaría respondiendo a un mensaje específico del bot basado en la campaña recibida.
     
     bot_message: es contexto opcional con scope de request que simula un mensaje previo del bot para el turno actual, basado en el parametro `content` de la ultima campaña recibida, con el fin de hacer la conversación más realista
 

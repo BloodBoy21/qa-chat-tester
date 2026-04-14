@@ -8,6 +8,7 @@ import requests as r
 from loguru import logger
 
 from db.sql import LogDB
+from utils.prompt_utils import extract_json_blocks
 
 SERVICE_URL = os.getenv("AGENT_URL", "")
 REQUEST_TIMEOUT = int(os.getenv("REQUEST_TIMEOUT", "120"))
@@ -182,7 +183,12 @@ def save_analysis(
         try:
             analysis_dict = json.loads(analysis)
         except json.JSONDecodeError:
-            analysis_dict = {"insights": analysis}
+            # LLM often wraps JSON in ```json ... ``` blocks
+            extracted = extract_json_blocks(analysis)
+            if extracted and ("insights" in extracted or "complete" in extracted):
+                analysis_dict = extracted
+            else:
+                analysis_dict = {"insights": analysis}
     elif isinstance(analysis, dict):
         analysis_dict = analysis
     else:
