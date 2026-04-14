@@ -330,6 +330,8 @@ let convList = [];
 let currentConvId = null;
 let convSearchField = 'session_id';
 let convSearchQuery = '';
+let convFilterStatus = 'all';
+let convFilterObjective = 'all';
 let analysesList = [];
 let analysisSearchQuery = '';
 
@@ -343,7 +345,7 @@ function showPage(name, el) {
   clearInterval(pollTimer);
   if (sseSource) { sseSource.close(); sseSource = null; }
   currentConvId = null;
-  if (name === 'conversations') { convPage = 1; convSearchQuery = ''; }
+  if (name === 'conversations') { convPage = 1; convSearchQuery = ''; convFilterStatus = 'all'; convFilterObjective = 'all'; }
   if (name === 'analyses') analysisSearchQuery = '';
   render();
 }
@@ -438,22 +440,37 @@ async function renderConversations(c) {
     <div class="card">
       <div class="card-header">
         Conversaciones
+        <div id="conv-counters" style="font-size:12px;color:var(--muted);font-weight:400;margin-left:8px"></div>
         <div class="actions">
           <button class="btn btn-ghost refresh-btn" onclick="loadConvList()">↻ Actualizar</button>
           <a class="btn btn-success refresh-btn" href="/api/export/conversations" download="conversaciones.xlsx">⬇ Exportar Excel</a>
         </div>
       </div>
-      <div class="search-bar">
-        <select class="search-select" id="conv-field-sel" onchange="convSearch()" title="Campo de búsqueda">
-          <option value="session_id">Session ID</option>
-          <option value="run_id">Run ID</option>
-          <option value="user_id">Usuario</option>
-          <option value="scenario">Escenario</option>
-          <option value="scenario_group_id">Grupo</option>
-        </select>
-        <input class="search-input" id="conv-search-q" type="text"
-               placeholder="Buscar…" oninput="convSearch()" value="${escHtml(convSearchQuery)}"/>
-        <button class="btn btn-ghost" style="padding:5px 10px;font-size:12px" onclick="clearConvSearch()">✕</button>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:10px 14px;border-bottom:1px solid var(--border)">
+        <div class="search-bar" style="flex:1;min-width:260px;margin:0;border:none;padding:0">
+          <select class="search-select" id="conv-field-sel" onchange="convSearch()" title="Campo de búsqueda">
+            <option value="session_id">Session ID</option>
+            <option value="run_id">Run ID</option>
+            <option value="user_id">Usuario</option>
+            <option value="scenario">Escenario</option>
+            <option value="scenario_group_id">Grupo</option>
+          </select>
+          <input class="search-input" id="conv-search-q" type="text"
+                 placeholder="Buscar…" oninput="convSearch()" value="${escHtml(convSearchQuery)}"/>
+          <button class="btn btn-ghost" style="padding:5px 10px;font-size:12px" onclick="clearConvSearch()">✕</button>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center;flex-shrink:0">
+          <span style="font-size:11px;color:var(--muted);font-weight:600">Estado:</span>
+          <button id="fs-all"  class="btn btn-ghost conv-filter-btn ${convFilterStatus==='all'?'btn-primary':''}"  style="font-size:11px;padding:4px 10px" onclick="setConvFilter('status','all')">Todas</button>
+          <button id="fs-done" class="btn btn-ghost conv-filter-btn ${convFilterStatus==='done'?'btn-primary':''}" style="font-size:11px;padding:4px 10px" onclick="setConvFilter('status','done')">Analizadas</button>
+          <button id="fs-pend" class="btn btn-ghost conv-filter-btn ${convFilterStatus==='pend'?'btn-primary':''}" style="font-size:11px;padding:4px 10px" onclick="setConvFilter('status','pend')">En curso</button>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center;flex-shrink:0">
+          <span style="font-size:11px;color:var(--muted);font-weight:600">Objetivo:</span>
+          <button id="fo-all"  class="btn btn-ghost conv-filter-btn ${convFilterObjective==='all'?'btn-primary':''}"  style="font-size:11px;padding:4px 10px" onclick="setConvFilter('obj','all')">Todos</button>
+          <button id="fo-ok"   class="btn btn-ghost conv-filter-btn ${convFilterObjective==='ok'?'btn-primary':''}"   style="font-size:11px;padding:4px 10px" onclick="setConvFilter('obj','ok')">Cumplido</button>
+          <button id="fo-fail" class="btn btn-ghost conv-filter-btn ${convFilterObjective==='fail'?'btn-primary':''}" style="font-size:11px;padding:4px 10px" onclick="setConvFilter('obj','fail')">No cumplido</button>
+        </div>
       </div>
       <div id="conv-list-wrap">${loading()}</div>
       <div id="conv-pagination" style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-top:1px solid var(--border)"></div>
@@ -480,6 +497,13 @@ function clearConvSearch() {
   renderConvPage();
 }
 
+function setConvFilter(type, val) {
+  if (type === 'status') convFilterStatus = val;
+  else convFilterObjective = val;
+  convPage = 1;
+  renderConvPage();
+}
+
 async function loadConvList() {
   convList = await api('GET', '/api/conversations');
   renderConvPage();
@@ -490,13 +514,33 @@ function renderConvPage() {
   const pg = document.getElementById('conv-pagination');
   if (!el) return;
 
-  // Apply search filter
-  const filtered = convSearchQuery
-    ? convList.filter(r => (String(r[convSearchField] || '')).toLowerCase().includes(convSearchQuery.toLowerCase()))
-    : convList;
+  // ── counters (always over full list) ──
+  const totalAll    = convList.length;
+  const totalDone   = convList.filter(r => r.insight_summary != null || r.insight_complete != null).length;
+  const totalOk     = convList.filter(r => r.insight_complete === 1).length;
+  const ctrEl = document.getElementById('conv-counters');
+  if (ctrEl) ctrEl.innerHTML =
+    `${totalAll} conversaciones · <span style="color:var(--accent2)">${totalDone} analizadas</span> · <span style="color:var(--green)">${totalOk} objetivo cumplido</span>`;
+
+  // ── update filter button active state ──
+  ['all','done','pend'].forEach(v => document.getElementById('fs-'+v)?.classList.toggle('btn-primary', convFilterStatus===v));
+  ['all','ok','fail'].forEach(v  => document.getElementById('fo-'+v)?.classList.toggle('btn-primary', convFilterObjective===v));
+
+  // ── apply filters ──
+  let filtered = convList;
+  if (convSearchQuery)
+    filtered = filtered.filter(r => (String(r[convSearchField] || '')).toLowerCase().includes(convSearchQuery.toLowerCase()));
+  if (convFilterStatus === 'done')
+    filtered = filtered.filter(r => r.insight_summary != null || r.insight_complete != null);
+  else if (convFilterStatus === 'pend')
+    filtered = filtered.filter(r => r.insight_summary == null && r.insight_complete == null);
+  if (convFilterObjective === 'ok')
+    filtered = filtered.filter(r => r.insight_complete === 1);
+  else if (convFilterObjective === 'fail')
+    filtered = filtered.filter(r => r.insight_complete === 0);
 
   if (!filtered.length) {
-    el.innerHTML = `<div class="empty-state">${convSearchQuery ? 'Sin resultados para "'+escHtml(convSearchQuery)+'"' : 'Sin conversaciones'}</div>`;
+    el.innerHTML = `<div class="empty-state">Sin resultados para los filtros aplicados</div>`;
     if (pg) pg.innerHTML = '';
     return;
   }
@@ -544,7 +588,8 @@ function renderConvPage() {
     const from = start + 1;
     const to   = Math.min(start + CONV_PAGE_SIZE, filtered.length);
     const total = filtered.length;
-    const suffix = convSearchQuery && filtered.length !== convList.length ? ` (de ${convList.length})` : '';
+    const isFiltered = filtered.length !== convList.length;
+    const suffix = isFiltered ? ` (de ${convList.length} total)` : '';
     pg.innerHTML = `
       <span style="font-size:12px;color:var(--muted)">${from}–${to} de ${total}${suffix}</span>
       <div style="display:flex;gap:4px;align-items:center">
@@ -567,8 +612,7 @@ function pageButtons(current, total) {
 }
 
 function convGoPage(p) {
-  const totalPages = Math.ceil(convList.length / CONV_PAGE_SIZE);
-  convPage = Math.max(1, Math.min(p, totalPages));
+  convPage = Math.max(1, p);
   renderConvPage();
 }
 
