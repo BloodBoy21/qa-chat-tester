@@ -413,9 +413,15 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 l.campaigns,
                 i.analysis,
                 i.complete,
-                l.created_at
+                l.created_at,
+                c.payload AS case_payload
             FROM logs l
             LEFT JOIN insights i ON i.run_id = l.run_id
+            LEFT JOIN (
+                SELECT run_id, payload
+                FROM cases
+                GROUP BY run_id
+            ) c ON c.run_id = l.run_id
             WHERE l.message IS NOT NULL
             ORDER BY l.run_id, l.created_at
         """).fetchall()
@@ -424,6 +430,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         headers = [
             "session_id", "run_id", "user_id", "scenario_group_id", "scenario",
             "message", "response", "campaign", "analysis", "complete", "created_at",
+            "test_case",
         ]
 
         def _parse_campaigns(val) -> str:
@@ -440,6 +447,15 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 pass
             return ""
 
+        def _parse_test_case(payload_str) -> str:
+            if not payload_str:
+                return ""
+            try:
+                p = json.loads(payload_str) if isinstance(payload_str, str) else payload_str
+                return json.dumps(p, ensure_ascii=False, indent=2)
+            except Exception:
+                return str(payload_str)
+
         data = []
         for r in rows:
             row = dict(r)
@@ -455,6 +471,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 row.get("analysis", ""),
                 "SI" if row.get("complete") else "NO",
                 row.get("created_at", ""),
+                _parse_test_case(row.get("case_payload")),
             ])
         xlsx = _build_xlsx(headers, data)
 
