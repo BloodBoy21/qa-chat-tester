@@ -74,7 +74,6 @@ class AgentBase:
         default_params = {
             "user_id": self.user_id,
             "run_id": self.run_id,
-            "campaigns": self._campaigns,
         }
 
         sig = inspect.signature(func)
@@ -91,9 +90,7 @@ class AgentBase:
 
         wrapper.__signature__ = sig.replace(parameters=new_params)
         wrapper.__annotations__ = {
-            k: _gemini_safe_hint(v)
-            for k, v in hints.items()
-            if k not in default_params
+            k: _gemini_safe_hint(v) for k, v in hints.items() if k not in default_params
         }
 
         return wrapper
