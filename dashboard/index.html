@@ -4,6 +4,7 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>QA Chat Tester</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -266,6 +267,66 @@ textarea.code{width:100%;background:#0d1117;color:#e6edf3;border:none;padding:16
 .analysis-card:hover .analysis-text::after{background:linear-gradient(transparent,var(--surface2))}
 .analysis-actions{display:flex;gap:8px;align-items:center;margin-top:10px;padding-top:8px;
                   border-top:1px solid var(--border)}
+/* ── ANÁLISIS CHARTS ── */
+.an-summary{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-bottom:16px}
+.an-stat{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:14px 16px;display:flex;flex-direction:column;gap:4px}
+.an-stat-lbl{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600}
+.an-stat-val{font-size:26px;font-weight:700}
+.an-stat-sub{font-size:11px;color:var(--muted)}
+.an-stat.ok   .an-stat-val{color:var(--green)}
+.an-stat.fail .an-stat-val{color:var(--red)}
+.an-stat.pend .an-stat-val{color:var(--warn)}
+.an-charts-row{display:flex;gap:12px;margin-bottom:12px;flex-wrap:wrap}
+.an-chart-box{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:14px 18px;flex:1;min-width:220px}
+.an-chart-box.wide{flex:2;min-width:280px}
+.an-chart-title{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600;margin-bottom:10px}
+.an-filter-bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:12px 0 10px;border-top:1px solid var(--border);margin-top:4px}
+.an-filter-group{display:flex;gap:4px;flex-wrap:wrap}
+.an-filter-btn{padding:4px 11px;border-radius:20px;border:1px solid var(--border);background:transparent;
+               color:var(--muted);font-size:11px;font-weight:600;cursor:pointer;transition:.15s;white-space:nowrap}
+.an-filter-btn:hover{color:var(--text);border-color:var(--text)}
+.an-filter-btn.active.ok  {background:rgba(74,222,128,.15);border-color:#4ade80;color:#4ade80}
+.an-filter-btn.active.fail{background:rgba(248,113,113,.15);border-color:#f87171;color:#f87171}
+.an-filter-btn.active.pend{background:rgba(251,191,36,.15);border-color:#fbbf24;color:#fbbf24}
+.an-filter-btn.active.all {background:rgba(108,99,255,.15);border-color:var(--accent);color:var(--accent)}
+/* ── PAGINATION ── */
+.an-pagination{display:flex;align-items:center;gap:4px;flex-wrap:wrap}
+.pg-btn{min-width:30px;height:28px;padding:0 7px;border-radius:6px;border:1px solid var(--border);
+        background:transparent;color:var(--muted);font-size:12px;cursor:pointer;transition:.15s;display:inline-flex;align-items:center;justify-content:center}
+.pg-btn:hover:not(:disabled){background:var(--surface2);color:var(--text);border-color:var(--text)}
+.pg-btn.active{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:700}
+.pg-btn:disabled{opacity:.35;cursor:not-allowed}
+.pg-ellipsis{color:var(--muted);font-size:12px;padding:0 4px}
+.pg-info{font-size:11px;color:var(--muted);margin-left:6px;white-space:nowrap}
+/* ── REPORT MODAL ── */
+.report-overlay{position:fixed;inset:0;background:rgba(0,0,0,.75);display:flex;align-items:center;
+                justify-content:center;z-index:200;padding:20px}
+.report-box{background:var(--surface);border:1px solid var(--border);border-radius:12px;
+            width:100%;max-width:860px;max-height:90vh;display:flex;flex-direction:column;overflow:hidden}
+.report-head{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;
+             justify-content:space-between;flex-shrink:0}
+.report-head h3{font-size:15px;font-weight:700}
+.report-head-actions{display:flex;gap:8px}
+.report-body{overflow-y:auto;padding:20px;flex:1;font-size:13px;line-height:1.7}
+.report-section{margin-bottom:24px}
+.report-section h4{font-size:11px;text-transform:uppercase;letter-spacing:.07em;font-weight:700;
+                   color:var(--accent);margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--border)}
+.report-kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:6px}
+.report-kpi{background:var(--surface2);border-radius:8px;padding:10px 14px;text-align:center}
+.report-kpi .rk-val{font-size:22px;font-weight:700;margin-bottom:2px}
+.report-kpi .rk-lbl{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.report-kpi.ok .rk-val{color:var(--green)}
+.report-kpi.fail .rk-val{color:var(--red)}
+.report-kpi.pend .rk-val{color:var(--warn)}
+.report-table{width:100%;border-collapse:collapse;font-size:12px}
+.report-table th{background:var(--surface2);color:var(--muted);font-size:10px;text-transform:uppercase;
+                 letter-spacing:.05em;padding:8px 12px;text-align:left;font-weight:600}
+.report-table td{padding:8px 12px;border-top:1px solid var(--border);vertical-align:top}
+.report-table tr:hover td{background:var(--surface2)}
+.report-fail-item{padding:10px 14px;border-radius:8px;background:rgba(248,113,113,.05);
+                  border:1px solid rgba(248,113,113,.15);margin-bottom:8px}
+.report-fail-meta{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:5px}
+.report-fail-text{font-size:12px;color:var(--muted);line-height:1.5;white-space:pre-wrap}
 </style>
 </head>
 <body>
@@ -360,6 +421,9 @@ let convFilterStatus = 'all';
 let convFilterObjective = 'all';
 let analysesList = [];
 let analysisSearchQuery = '';
+let analysisFilterStatus   = 'all'; // 'all' | 'ok' | 'fail' | 'pending'
+let analysisFilterGroup    = '';
+let analysisFilterCampaign = '';
 
 // ── Navigation ──────────────────────────────────────────────────────────────
 function showPage(name, el) {
@@ -372,7 +436,7 @@ function showPage(name, el) {
   if (sseSource) { sseSource.close(); sseSource = null; }
   currentConvId = null;
   if (name === 'conversations') { convPage = 1; convSearchQuery = ''; convFilterStatus = 'all'; convFilterObjective = 'all'; }
-  if (name === 'analyses') analysisSearchQuery = '';
+  if (name === 'analyses') { analysisSearchQuery = ''; analysisFilterStatus = 'all'; analysisFilterGroup = ''; analysisFilterCampaign = ''; }
   render();
 }
 
@@ -1047,22 +1111,95 @@ function backToConvList() {
 }
 
 // ── ANALYSES ───────────────────────────────────────────────────────────────────
+
+let _chartDonut = null;
+let _chartBars  = null;
+let _chartLine  = null;
+let analysisPage = 1;
+const AN_PAGE_SIZE = 15;
+
+function _destroyCharts() {
+  [_chartDonut, _chartBars, _chartLine].forEach(c => { try { c?.destroy(); } catch(_){} });
+  _chartDonut = _chartBars = _chartLine = null;
+}
+
+// ── SVG Charts (DEAD CODE — kept as fallback marker) ──────────────────────────
+
+function svgDonut(ok, fail, pend, size = 130) {
+  const total = ok + fail + pend || 1;
+  const r = 44, cx = size / 2, cy = size / 2, sw = 20;
+  const circ = 2 * Math.PI * r;
+  const segs = [{v:ok,c:'#4ade80'},{v:fail,c:'#f87171'},{v:pend,c:'#fbbf24'}];
+  let offset = 0;
+  const arcs = segs.map(({v, c}) => {
+    const len = (v / total) * circ;
+    const arc = v > 0
+      ? `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${c}" stroke-width="${sw}"
+           stroke-dasharray="${len.toFixed(2)} ${(circ-len).toFixed(2)}"
+           stroke-dashoffset="${(-offset).toFixed(2)}"
+           transform="rotate(-90 ${cx} ${cy})" stroke-linecap="butt"/>`
+      : '';
+    offset += len;
+    return arc;
+  });
+  const pct = total === 1 && ok === 0 ? '–' : Math.round(ok / total * 100) + '%';
+  return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
+    <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="var(--border)" stroke-width="${sw}"/>
+    ${arcs.join('')}
+    <text x="${cx}" y="${cy - 6}" text-anchor="middle" dominant-baseline="middle"
+      fill="var(--text)" font-size="17" font-weight="700" font-family="inherit">${pct}</text>
+    <text x="${cx}" y="${cy + 13}" text-anchor="middle" dominant-baseline="middle"
+      fill="var(--muted)" font-size="9" font-family="inherit">cumplido</text>
+  </svg>`;
+}
+
+function svgGroupBars(groups) {
+  if (!groups.length) return '<div style="color:var(--muted);font-size:12px;padding:20px">Sin grupos</div>';
+  const W = Math.max(260, groups.length * 52 + 20);
+  const H = 110, padB = 28, padT = 8, padL = 4;
+  const maxVal = Math.max(...groups.map(g => g.ok + g.fail + g.pend), 1);
+  const barW = Math.min(36, Math.floor((W - padL * 2) / groups.length) - 6);
+  const chartH = H - padB - padT;
+
+  const bars = groups.map((g, i) => {
+    const x = padL + i * (barW + 6);
+    const okH   = Math.round((g.ok   / maxVal) * chartH);
+    const failH = Math.round((g.fail / maxVal) * chartH);
+    const pendH = Math.round((g.pend / maxVal) * chartH);
+    const total = okH + failH + pendH;
+    const baseY = H - padB;
+    const lbl = g.id.length > 7 ? g.id.slice(0, 6) + '…' : g.id;
+    return `
+      ${pendH > 0 ? `<rect x="${x}" y="${baseY - total}" width="${barW}" height="${pendH}" fill="#fbbf24" rx="2 2 0 0"/>` : ''}
+      ${failH > 0 ? `<rect x="${x}" y="${baseY - total + pendH}" width="${barW}" height="${failH}" fill="#f87171"/>` : ''}
+      ${okH   > 0 ? `<rect x="${x}" y="${baseY - okH}" width="${barW}" height="${okH}" fill="#4ade80" rx="0 0 2 2"/>` : ''}
+      <text x="${x + barW / 2}" y="${H - padB + 14}" text-anchor="middle"
+        fill="var(--muted)" font-size="8" font-family="inherit">${escHtml(lbl)}</text>
+      <text x="${x + barW / 2}" y="${baseY - total - 4}" text-anchor="middle"
+        fill="var(--muted)" font-size="8" font-family="inherit">${g.ok + g.fail + g.pend}</text>
+    `;
+  });
+
+  return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" style="overflow:visible">${bars.join('')}</svg>`;
+}
+
+// ── Analyses render ──────────────────────────────────────────────────────────
+
 async function renderAnalyses(c) {
+  _destroyCharts();
   c.innerHTML = `
-    <div class="card">
+    <div class="card" id="analyses-card">
       <div class="card-header">
         Análisis de conversaciones
         <div class="actions">
           <button class="btn btn-ghost refresh-btn" onclick="loadAnalyses()">↻ Actualizar</button>
+          <button class="btn btn-primary" style="font-size:12px" onclick="openReportModal()">Reporte ejecutivo</button>
         </div>
       </div>
-      <div class="search-bar">
-        <input class="search-input" id="analysis-search-q" type="text"
-               placeholder="Buscar en análisis, escenario, usuario, session ID…"
-               oninput="analysisSearch()" value="${escHtml(analysisSearchQuery)}"/>
-        <button class="btn btn-ghost" style="padding:5px 10px;font-size:12px" onclick="clearAnalysisSearch()">✕</button>
+      <div id="analyses-wrap" style="padding:16px 18px">
+        <div id="an-top">${loading('Cargando análisis…')}</div>
+        <div id="an-list"></div>
       </div>
-      <div id="analyses-wrap" style="padding:16px">${loading('Cargando análisis…')}</div>
     </div>`;
   await loadAnalyses();
   pollTimer = setInterval(loadAnalyses, 8000);
@@ -1070,84 +1207,349 @@ async function renderAnalyses(c) {
 
 async function loadAnalyses() {
   const res = await api('GET', '/api/analyses');
-  analysesList = Array.isArray(res) ? res : [];
-  if (!Array.isArray(res) && res?.error) {
-    const wrap = document.getElementById('analyses-wrap');
-    if (wrap) wrap.innerHTML = `<div class="empty-state" style="color:var(--red)">Error: ${escHtml(res.error)}</div>`;
+  if (!Array.isArray(res)) {
+    const top = document.getElementById('an-top');
+    if (top) top.innerHTML = `<div class="empty-state" style="color:var(--red)">Error: ${escHtml(res?.error||'desconocido')}</div>`;
     return;
   }
-  renderAnalysisPage();
+  analysesList = res;
+  analysisPage = 1;
+  _renderAnalysisStats();
+  _renderAnalysisList();
+}
+
+function _applyAnalysisFilters(list) {
+  return list.filter(a => {
+    if (analysisFilterStatus === 'ok'      && a.complete !== 1) return false;
+    if (analysisFilterStatus === 'fail'    && a.complete !== 0) return false;
+    if (analysisFilterStatus === 'pending' && (a.complete === 1 || a.complete === 0)) return false;
+    if (analysisFilterGroup && (a.scenario_group_id||'') !== analysisFilterGroup) return false;
+    if (analysisFilterCampaign) {
+      const camps = (() => { try { const c = a.campaigns; return Array.isArray(c)?c:(c?JSON.parse(c):[]); } catch { return []; } })();
+      if (!camps.some(c => (c.campaign_name||c.campaign_id||'') === analysisFilterCampaign)) return false;
+    }
+    if (analysisSearchQuery) {
+      const q = analysisSearchQuery.toLowerCase();
+      return (a.analysis||'').toLowerCase().includes(q) ||
+             (a.scenario||'').toLowerCase().includes(q) ||
+             (a.scenario_group_id||'').toLowerCase().includes(q) ||
+             (a.user_id||'').toLowerCase().includes(q) ||
+             (a.session_id||'').toLowerCase().includes(q);
+    }
+    return true;
+  });
+}
+
+function setAnalysisFilter(type, val) {
+  if (type === 'status')   analysisFilterStatus   = val;
+  if (type === 'group')    analysisFilterGroup    = val;
+  if (type === 'campaign') analysisFilterCampaign = val;
+  analysisPage = 1;
+  _renderAnalysisList();
 }
 
 function analysisSearch() {
   analysisSearchQuery = document.getElementById('analysis-search-q')?.value || '';
-  renderAnalysisPage();
+  analysisPage = 1;
+  _renderAnalysisList();
 }
 
 function clearAnalysisSearch() {
   analysisSearchQuery = '';
   const el = document.getElementById('analysis-search-q');
   if (el) el.value = '';
-  renderAnalysisPage();
+  analysisPage = 1;
+  _renderAnalysisList();
 }
 
-function renderAnalysisPage() {
-  const wrap = document.getElementById('analyses-wrap');
-  if (!wrap) return;
+function setAnalysisPage(p) {
+  analysisPage = p;
+  _renderAnalysisList();
+  document.getElementById('an-list')?.scrollIntoView({behavior:'smooth', block:'start'});
+}
 
-  const q = analysisSearchQuery.toLowerCase();
-  const list = q
-    ? analysesList.filter(a =>
-        (a.analysis||'').toLowerCase().includes(q) ||
-        (a.scenario||'').toLowerCase().includes(q) ||
-        (a.scenario_group_id||'').toLowerCase().includes(q) ||
-        (a.user_id||'').toLowerCase().includes(q) ||
-        (a.session_id||'').toLowerCase().includes(q))
-    : analysesList;
+// ── Stats + Chart.js charts (only re-rendered on data reload) ─────────────────
 
-  if (!list.length) {
-    wrap.innerHTML = `<div class="empty-state">${q ? 'Sin resultados para "'+escHtml(analysisSearchQuery)+'"' : 'Sin análisis registrados'}</div>`;
-    return;
+function _renderAnalysisStats() {
+  const top = document.getElementById('an-top');
+  if (!top) return;
+
+  const total   = analysesList.length;
+  const ok      = analysesList.filter(a => a.complete === 1).length;
+  const fail    = analysesList.filter(a => a.complete === 0).length;
+  const pending = total - ok - fail;
+  const pctOk   = total ? Math.round(ok / total * 100) : 0;
+
+  // Group aggregation
+  const groupMap = {};
+  analysesList.forEach(a => {
+    const g = a.scenario_group_id || '(sin grupo)';
+    if (!groupMap[g]) groupMap[g] = {id:g, ok:0, fail:0, pend:0};
+    if (a.complete === 1)      groupMap[g].ok++;
+    else if (a.complete === 0) groupMap[g].fail++;
+    else                       groupMap[g].pend++;
+  });
+  const groups = Object.values(groupMap).sort((a,b)=>(b.ok+b.fail+b.pend)-(a.ok+a.fail+a.pend));
+
+  // Timeline (group by day)
+  const dateMap = {};
+  analysesList.forEach(a => {
+    const d = (a.created_at||'').slice(0,10);
+    if (!d) return;
+    if (!dateMap[d]) dateMap[d] = {ok:0, fail:0, pend:0};
+    if (a.complete === 1)      dateMap[d].ok++;
+    else if (a.complete === 0) dateMap[d].fail++;
+    else                       dateMap[d].pend++;
+  });
+  const dates = Object.keys(dateMap).sort();
+  const hasTimeline = dates.length > 1;
+
+  _destroyCharts();
+
+  top.innerHTML = `
+    <div class="an-summary">
+      <div class="an-stat">
+        <span class="an-stat-lbl">Total analizados</span>
+        <span class="an-stat-val" style="color:var(--accent)">${total}</span>
+      </div>
+      <div class="an-stat ok">
+        <span class="an-stat-lbl">Tasa de éxito</span>
+        <span class="an-stat-val">${pctOk}%</span>
+      </div>
+      <div class="an-stat ok">
+        <span class="an-stat-lbl">Cumplidos</span>
+        <span class="an-stat-val">${ok}</span>
+        <span class="an-stat-sub">${total?Math.round(ok/total*100):0}% del total</span>
+      </div>
+      <div class="an-stat fail">
+        <span class="an-stat-lbl">Fallidos</span>
+        <span class="an-stat-val">${fail}</span>
+        <span class="an-stat-sub">${total?Math.round(fail/total*100):0}% del total</span>
+      </div>
+      <div class="an-stat pend">
+        <span class="an-stat-lbl">Sin evaluar</span>
+        <span class="an-stat-val">${pending}</span>
+        <span class="an-stat-sub">${total?Math.round(pending/total*100):0}% del total</span>
+      </div>
+    </div>
+    ${total > 0 ? `
+    <div class="an-charts-row">
+      <div class="an-chart-box" style="max-width:300px;min-width:220px">
+        <div class="an-chart-title">Distribución general</div>
+        <div style="position:relative;height:200px"><canvas id="chart-donut"></canvas></div>
+      </div>
+      ${groups.length >= 1 ? `
+      <div class="an-chart-box wide" style="overflow-x:auto">
+        <div class="an-chart-title">Resultados por grupo</div>
+        <div style="position:relative;height:200px;min-width:${Math.max(260,groups.length*72)}px">
+          <canvas id="chart-bars"></canvas>
+        </div>
+      </div>` : ''}
+    </div>
+    ${hasTimeline ? `
+    <div class="an-chart-box" style="margin-bottom:12px">
+      <div class="an-chart-title">Evolución temporal</div>
+      <div style="position:relative;height:160px"><canvas id="chart-line"></canvas></div>
+    </div>` : ''}` : ''}
+  `;
+
+  if (!total || typeof Chart === 'undefined') return;
+
+  Chart.defaults.color       = '#7c85a2';
+  Chart.defaults.borderColor = '#2e3250';
+  Chart.defaults.font.family = "'Segoe UI',system-ui,sans-serif";
+  Chart.defaults.font.size   = 11;
+
+  const C = {
+    ok:   {bg:'rgba(74,222,128,.82)',  b:'#4ade80'},
+    fail: {bg:'rgba(248,113,113,.82)', b:'#f87171'},
+    pend: {bg:'rgba(251,191,36,.82)',  b:'#fbbf24'},
+  };
+
+  // Doughnut
+  const ctxD = document.getElementById('chart-donut')?.getContext('2d');
+  if (ctxD) {
+    _chartDonut = new Chart(ctxD, {
+      type: 'doughnut',
+      data: {
+        labels: ['Cumplidos','Fallidos','Sin evaluar'],
+        datasets: [{
+          data: [ok, fail, pending],
+          backgroundColor: [C.ok.bg, C.fail.bg, C.pend.bg],
+          borderColor:     [C.ok.b,  C.fail.b,  C.pend.b],
+          borderWidth: 1.5, hoverOffset: 10,
+        }],
+      },
+      options: {
+        responsive:true, maintainAspectRatio:false, cutout:'68%',
+        plugins: {
+          legend: {position:'right', labels:{padding:14, usePointStyle:true, pointStyleWidth:9}},
+          tooltip: {callbacks:{label: ctx => ` ${ctx.label}: ${ctx.raw} (${total?Math.round(ctx.raw/total*100):0}%)`}},
+        },
+      },
+    });
   }
 
-  const suffix = q && list.length !== analysesList.length
-    ? `<span style="font-size:12px;color:var(--muted);margin-bottom:12px;display:block">${list.length} de ${analysesList.length} resultados</span>`
-    : '';
+  // Stacked bar by group
+  const ctxB = document.getElementById('chart-bars')?.getContext('2d');
+  if (ctxB && groups.length) {
+    _chartBars = new Chart(ctxB, {
+      type: 'bar',
+      data: {
+        labels: groups.map(g=>g.id),
+        datasets: [
+          {label:'Cumplidos',   data:groups.map(g=>g.ok),   backgroundColor:C.ok.bg,   borderColor:C.ok.b,   borderWidth:1},
+          {label:'Fallidos',    data:groups.map(g=>g.fail), backgroundColor:C.fail.bg, borderColor:C.fail.b, borderWidth:1},
+          {label:'Sin evaluar', data:groups.map(g=>g.pend), backgroundColor:C.pend.bg, borderColor:C.pend.b, borderWidth:1},
+        ],
+      },
+      options: {
+        responsive:true, maintainAspectRatio:false,
+        scales: {
+          x: {stacked:true, grid:{color:'#2e3250'}, ticks:{maxRotation:35, font:{size:10}}},
+          y: {stacked:true, grid:{color:'#2e3250'}, beginAtZero:true, ticks:{stepSize:1}},
+        },
+        plugins: {
+          legend:  {position:'top', labels:{usePointStyle:true, padding:12}},
+          tooltip: {mode:'index', intersect:false},
+        },
+      },
+    });
+  }
 
-  wrap.innerHTML = suffix + list.map((a, idx) => {
-    const aCamps = (() => { try { const c = a.campaigns; return Array.isArray(c) ? c : (c ? JSON.parse(c) : []); } catch { return []; } })();
-    const cardClass = a.complete === 1 ? 'ok' : a.complete === 0 ? 'fail' : 'pending';
-    const objBadge  = a.complete === 1
-      ? `<span class="chip chip-green">✓ Objetivo cumplido</span>`
-      : a.complete === 0
-        ? `<span class="chip chip-red">✗ Objetivo no cumplido</span>`
-        : `<span class="chip chip-orange">⏳ Sin evaluar</span>`;
-    const expandId = `atxt_${idx}`;
-    return `
-    <div class="analysis-card ${cardClass}">
-      <div class="analysis-meta">
-        <span style="font-family:monospace;font-size:11px;color:var(--muted)" title="${a.session_id||''}">${(a.session_id||'–').slice(0,20)}…</span>
-        ${a.scenario_group_id ? `<span class="badge badge-blue">${a.scenario_group_id}</span>` : ''}
-        ${a.scenario ? `<span class="tag" title="${a.scenario}">${a.scenario.length>40?a.scenario.slice(0,38)+'…':a.scenario}</span>` : ''}
-        ${a.user_id ? `<span class="tag">👤 ${a.user_id}</span>` : ''}
-        ${a.message_count ? `<span class="tag">💬 ${a.message_count} msgs</span>` : ''}
-        ${aCamps.map(c => `<span class="tag" style="color:var(--accent2);border-color:rgba(0,212,170,.3)" title="${escHtml(c.campaign_id||'')}">📣 ${escHtml(c.campaign_name||c.campaign_id||'–')}</span>`).join('')}
-        <span style="margin-left:auto;font-size:11px;color:var(--muted)">${fmtDate(a.created_at)}</span>
-      </div>
-      ${objBadge}
-      <div class="analysis-text" id="${expandId}" style="margin-top:10px">
-        ${escHtml(a.analysis || '(sin análisis)')}
-      </div>
-      <div class="analysis-actions">
-        <button class="btn btn-ghost" style="font-size:11px;padding:4px 10px"
-          onclick="toggleAnalysisExpand('${expandId}',this)">▼ Expandir</button>
-        <button class="btn btn-primary" style="font-size:11px;padding:4px 12px"
-          onclick="openConvFromAnalysis('${a.session_id}')">↗ Ver conversación</button>
-        <span style="margin-left:auto;font-family:monospace;font-size:10px;color:var(--muted)"
-              title="${a.run_id||''}">run: ${(a.run_id||'–').slice(0,12)}…</span>
-      </div>
-    </div>`;
-  }).join('');
+  // Line chart — timeline
+  const ctxL = document.getElementById('chart-line')?.getContext('2d');
+  if (ctxL && hasTimeline) {
+    _chartLine = new Chart(ctxL, {
+      type: 'line',
+      data: {
+        labels: dates,
+        datasets: [
+          {label:'Cumplidos',   data:dates.map(d=>dateMap[d].ok),   borderColor:C.ok.b,   backgroundColor:'rgba(74,222,128,.08)',  tension:.35, fill:true, pointRadius:3, borderWidth:2},
+          {label:'Fallidos',    data:dates.map(d=>dateMap[d].fail), borderColor:C.fail.b, backgroundColor:'rgba(248,113,113,.08)', tension:.35, fill:true, pointRadius:3, borderWidth:2},
+          {label:'Sin evaluar', data:dates.map(d=>dateMap[d].pend), borderColor:C.pend.b, backgroundColor:'rgba(251,191,36,.08)',  tension:.35, fill:true, pointRadius:3, borderWidth:2},
+        ],
+      },
+      options: {
+        responsive:true, maintainAspectRatio:false,
+        interaction:{mode:'index', intersect:false},
+        scales: {
+          x: {grid:{color:'#2e3250'}, ticks:{font:{size:10}}},
+          y: {grid:{color:'#2e3250'}, beginAtZero:true, ticks:{stepSize:1}},
+        },
+        plugins: {legend:{position:'top', labels:{usePointStyle:true, padding:12}}},
+      },
+    });
+  }
+}
+
+// ── Filtered + paginated list ─────────────────────────────────────────────────
+
+function _renderAnalysisList() {
+  const listEl = document.getElementById('an-list');
+  if (!listEl) return;
+
+  const total    = analysesList.length;
+  const filtered = _applyAnalysisFilters(analysesList);
+  const pageCount = Math.max(1, Math.ceil(filtered.length / AN_PAGE_SIZE));
+  if (analysisPage > pageCount) analysisPage = pageCount;
+  const pageItems = filtered.slice((analysisPage-1)*AN_PAGE_SIZE, analysisPage*AN_PAGE_SIZE);
+
+  const ok      = analysesList.filter(a => a.complete === 1).length;
+  const fail    = analysesList.filter(a => a.complete === 0).length;
+  const pending = total - ok - fail;
+
+  const allGroups = [...new Set(analysesList.map(a=>a.scenario_group_id).filter(Boolean))].sort();
+  const allCamps  = [...new Set(analysesList.flatMap(a=>{
+    try{const c=a.campaigns;const arr=Array.isArray(c)?c:(c?JSON.parse(c):[]);return arr.map(x=>x.campaign_name||x.campaign_id||'');}
+    catch{return [];}
+  }).filter(Boolean))].sort();
+
+  const statusBtns = [
+    {k:'all',    lbl:`Todos (${total})`,         cls:'all'},
+    {k:'ok',     lbl:`Cumplidos (${ok})`,        cls:'ok'},
+    {k:'fail',   lbl:`Fallidos (${fail})`,       cls:'fail'},
+    {k:'pending',lbl:`Sin evaluar (${pending})`, cls:'pend'},
+  ].map(b=>`<button class="an-filter-btn${analysisFilterStatus===b.k?' active '+b.cls:''}"
+    onclick="setAnalysisFilter('status','${b.k}')">${b.lbl}</button>`).join('');
+
+  const groupSel = allGroups.length ? `
+    <select class="search-select" onchange="setAnalysisFilter('group',this.value)">
+      <option value="">Todos los grupos</option>
+      ${allGroups.map(g=>`<option value="${escHtml(g)}"${analysisFilterGroup===g?' selected':''}>${escHtml(g)}</option>`).join('')}
+    </select>` : '';
+
+  const campSel = allCamps.length ? `
+    <select class="search-select" onchange="setAnalysisFilter('campaign',this.value)">
+      <option value="">Todas las campañas</option>
+      ${allCamps.map(g=>`<option value="${escHtml(g)}"${analysisFilterCampaign===g?' selected':''}>${escHtml(g)}</option>`).join('')}
+    </select>` : '';
+
+  function pgHtml() {
+    if (pageCount <= 1) return '';
+    const prev = `<button class="pg-btn" onclick="setAnalysisPage(${analysisPage-1})"${analysisPage<=1?' disabled':''}>←</button>`;
+    const next = `<button class="pg-btn" onclick="setAnalysisPage(${analysisPage+1})"${analysisPage>=pageCount?' disabled':''}>→</button>`;
+    const nums = [];
+    for (let i = 1; i <= pageCount; i++) {
+      if (i===1 || i===pageCount || Math.abs(i-analysisPage)<=2) {
+        nums.push(`<button class="pg-btn${i===analysisPage?' active':''}" onclick="setAnalysisPage(${i})">${i}</button>`);
+      } else if (nums[nums.length-1] !== '<span class="pg-ellipsis">…</span>') {
+        nums.push('<span class="pg-ellipsis">…</span>');
+      }
+    }
+    const s = (analysisPage-1)*AN_PAGE_SIZE+1, e = Math.min(analysisPage*AN_PAGE_SIZE, filtered.length);
+    return `<div class="an-pagination">${prev}${nums.join('')}${next}<span class="pg-info">${s}–${e} de ${filtered.length}</span></div>`;
+  }
+
+  const cardsHtml = !pageItems.length
+    ? `<div class="empty-state">Sin resultados para los filtros aplicados</div>`
+    : pageItems.map((a, idx) => {
+        const aCamps  = (()=>{try{const c=a.campaigns;return Array.isArray(c)?c:(c?JSON.parse(c):[]);}catch{return [];}})();
+        const cardCls = a.complete===1?'ok':a.complete===0?'fail':'pending';
+        const badge   = a.complete===1
+          ? `<span class="chip chip-green">✓ Objetivo cumplido</span>`
+          : a.complete===0 ? `<span class="chip chip-red">✗ Objetivo no cumplido</span>`
+          : `<span class="chip chip-orange">⏳ Sin evaluar</span>`;
+        const eid = `atxt_${idx}`;
+        return `
+        <div class="analysis-card ${cardCls}">
+          <div class="analysis-meta">
+            <span style="font-family:monospace;font-size:11px;color:var(--muted)" title="${escHtml(a.session_id||'')}">${(a.session_id||'–').slice(0,18)}…</span>
+            ${a.scenario_group_id?`<span class="badge badge-blue">${escHtml(a.scenario_group_id)}</span>`:''}
+            ${a.scenario?`<span class="tag" title="${escHtml(a.scenario)}">${a.scenario.length>44?a.scenario.slice(0,42)+'…':escHtml(a.scenario)}</span>`:''}
+            ${a.user_id?`<span class="tag">👤 ${escHtml(a.user_id)}</span>`:''}
+            ${a.message_count?`<span class="tag">💬 ${a.message_count}</span>`:''}
+            ${aCamps.map(c=>`<span class="tag" style="color:var(--accent2);border-color:rgba(0,212,170,.3)">📣 ${escHtml(c.campaign_name||c.campaign_id||'–')}</span>`).join('')}
+            <span style="margin-left:auto;font-size:11px;color:var(--muted)">${fmtDate(a.created_at)}</span>
+          </div>
+          ${badge}
+          <div class="analysis-text" id="${eid}" style="margin-top:10px">${escHtml(a.analysis||'(sin análisis)')}</div>
+          <div class="analysis-actions">
+            <button class="btn btn-ghost" style="font-size:11px;padding:4px 10px"
+              onclick="toggleAnalysisExpand('${eid}',this)">▼ Expandir</button>
+            <button class="btn btn-primary" style="font-size:11px;padding:4px 12px"
+              onclick="openConvFromAnalysis('${escHtml(a.session_id||'')}')">↗ Ver conversación</button>
+            <span style="margin-left:auto;font-family:monospace;font-size:10px;color:var(--muted)"
+                  title="${escHtml(a.run_id||'')}">run: ${(a.run_id||'–').slice(0,12)}…</span>
+          </div>
+        </div>`;
+      }).join('');
+
+  listEl.innerHTML = `
+    <div class="an-filter-bar">
+      <div class="an-filter-group">${statusBtns}</div>
+      ${groupSel}${campSel}
+      <input class="search-input" style="flex:1;min-width:140px" id="analysis-search-q" type="text"
+             placeholder="Buscar en análisis, escenario, usuario…" oninput="analysisSearch()" value="${escHtml(analysisSearchQuery)}"/>
+      ${analysisSearchQuery?`<button class="btn btn-ghost" style="padding:5px 10px;font-size:12px" onclick="clearAnalysisSearch()">✕</button>`:''}
+    </div>
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0 4px;flex-wrap:wrap;gap:6px">
+      <span style="font-size:12px;color:var(--muted)">${filtered.length} resultado${filtered.length!==1?'s':''}${filtered.length!==total?` de ${total} totales`:''}</span>
+      ${pgHtml()}
+    </div>
+    ${cardsHtml}
+    ${pageCount>1?`<div style="display:flex;justify-content:flex-end;margin-top:14px">${pgHtml()}</div>`:''}
+  `;
 }
 
 function toggleAnalysisExpand(id, btn) {
@@ -1160,6 +1562,205 @@ function toggleAnalysisExpand(id, btn) {
 function openConvFromAnalysis(sid) {
   currentConvId = sid;
   showPage('conversations', document.querySelector('[data-page="conversations"]'));
+}
+
+// ── Executive Report ─────────────────────────────────────────────────────────
+
+function openReportModal() {
+  const total   = analysesList.length;
+  if (!total) { alert('Sin datos para generar reporte.'); return; }
+  const ok      = analysesList.filter(a => a.complete === 1).length;
+  const fail    = analysesList.filter(a => a.complete === 0).length;
+  const pending = total - ok - fail;
+  const pctOk   = Math.round(ok / total * 100);
+
+  // Group breakdown
+  const groupMap = {};
+  analysesList.forEach(a => {
+    const g = a.scenario_group_id || '(sin grupo)';
+    if (!groupMap[g]) groupMap[g] = {id:g, ok:0, fail:0, pend:0};
+    if (a.complete === 1)      groupMap[g].ok++;
+    else if (a.complete === 0) groupMap[g].fail++;
+    else                       groupMap[g].pend++;
+  });
+  const groups = Object.values(groupMap).sort((a, b) => (b.ok+b.fail+b.pend) - (a.ok+a.fail+a.pend));
+
+  // Failed cases (latest 20)
+  const failedCases = analysesList
+    .filter(a => a.complete === 0)
+    .slice(0, 20);
+
+  // Campaign breakdown
+  const campMap = {};
+  analysesList.forEach(a => {
+    const camps = (() => { try { const c = a.campaigns; return Array.isArray(c)?c:(c?JSON.parse(c):[]); } catch { return []; } })();
+    camps.forEach(c => {
+      const k = c.campaign_name || c.campaign_id || '?';
+      if (!campMap[k]) campMap[k] = {name:k, ok:0, fail:0, total:0};
+      campMap[k].total++;
+      if (a.complete === 1) campMap[k].ok++;
+      else if (a.complete === 0) campMap[k].fail++;
+    });
+  });
+  const camps = Object.values(campMap).sort((a, b) => b.total - a.total);
+
+  const now = new Date().toLocaleDateString('es-MX', {year:'numeric',month:'long',day:'numeric'});
+
+  const groupRows = groups.map(g => {
+    const t = g.ok + g.fail + g.pend;
+    const p = Math.round(g.ok / t * 100);
+    return `<tr>
+      <td>${escHtml(g.id)}</td>
+      <td style="text-align:center">${t}</td>
+      <td style="text-align:center;color:#4ade80">${g.ok} (${p}%)</td>
+      <td style="text-align:center;color:#f87171">${g.fail}</td>
+      <td style="text-align:center;color:#fbbf24">${g.pend}</td>
+    </tr>`;
+  }).join('');
+
+  const campRows = camps.map(c => {
+    const p = Math.round(c.ok / c.total * 100);
+    return `<tr>
+      <td>${escHtml(c.name)}</td>
+      <td style="text-align:center">${c.total}</td>
+      <td style="text-align:center;color:#4ade80">${c.ok} (${p}%)</td>
+      <td style="text-align:center;color:#f87171">${c.fail}</td>
+    </tr>`;
+  }).join('');
+
+  const failItems = failedCases.map(a => `
+    <div class="report-fail-item">
+      <div class="report-fail-meta">
+        ${a.scenario_group_id ? `<span class="badge badge-blue">${escHtml(a.scenario_group_id)}</span>` : ''}
+        ${a.scenario ? `<span class="tag">${escHtml(a.scenario.length>50?a.scenario.slice(0,48)+'…':a.scenario)}</span>` : ''}
+        ${a.user_id ? `<span class="tag" style="color:var(--muted)">👤 ${escHtml(a.user_id)}</span>` : ''}
+        <span style="margin-left:auto;font-size:10px;color:var(--muted)">${fmtDate(a.created_at)}</span>
+      </div>
+      <div class="report-fail-text">${escHtml((a.analysis||'(sin análisis)').slice(0, 400))}${(a.analysis||'').length>400?'…':''}</div>
+    </div>`).join('');
+
+  const html = `
+    <div class="report-overlay" id="report-overlay" onclick="if(event.target===this)closeReportModal()">
+      <div class="report-box">
+        <div class="report-head">
+          <div>
+            <h3>Reporte Ejecutivo QA</h3>
+            <div style="font-size:11px;color:var(--muted);margin-top:2px">${now}</div>
+          </div>
+          <div class="report-head-actions">
+            <button class="btn btn-ghost" style="font-size:12px" onclick="copyReport()">Copiar texto</button>
+            <button class="btn btn-ghost" style="font-size:12px" onclick="downloadReport()">Descargar .txt</button>
+            <button class="btn btn-danger" style="font-size:12px" onclick="closeReportModal()">✕ Cerrar</button>
+          </div>
+        </div>
+        <div class="report-body">
+
+          <div class="report-section">
+            <h4>Resumen general</h4>
+            <div class="report-kpi-row">
+              <div class="report-kpi"><div class="rk-val" style="color:var(--accent)">${total}</div><div class="rk-lbl">Analizados</div></div>
+              <div class="report-kpi ok"><div class="rk-val">${pctOk}%</div><div class="rk-lbl">Tasa de éxito</div></div>
+              <div class="report-kpi ok"><div class="rk-val">${ok}</div><div class="rk-lbl">Cumplidos</div></div>
+              <div class="report-kpi fail"><div class="rk-val">${fail}</div><div class="rk-lbl">Fallidos</div></div>
+            </div>
+            <div style="margin-top:8px;font-size:12px;color:var(--muted)">
+              ${pending} conversaciones sin evaluar (${Math.round(pending/total*100)}%)
+            </div>
+          </div>
+
+          ${groups.length > 0 ? `
+          <div class="report-section">
+            <h4>Resultados por grupo</h4>
+            <table class="report-table">
+              <thead><tr><th>Grupo</th><th>Total</th><th>Cumplidos</th><th>Fallidos</th><th>Sin eval.</th></tr></thead>
+              <tbody>${groupRows}</tbody>
+            </table>
+          </div>` : ''}
+
+          ${camps.length > 0 ? `
+          <div class="report-section">
+            <h4>Resultados por campaña</h4>
+            <table class="report-table">
+              <thead><tr><th>Campaña</th><th>Total</th><th>Cumplidos</th><th>Fallidos</th></tr></thead>
+              <tbody>${campRows}</tbody>
+            </table>
+          </div>` : ''}
+
+          ${failedCases.length > 0 ? `
+          <div class="report-section">
+            <h4>Casos fallidos${failedCases.length < fail ? ` (mostrando ${failedCases.length} de ${fail})` : ''}</h4>
+            ${failItems}
+          </div>` : ''}
+
+        </div>
+      </div>
+    </div>`;
+
+  document.body.insertAdjacentHTML('beforeend', html);
+}
+
+function closeReportModal() {
+  document.getElementById('report-overlay')?.remove();
+}
+
+function _reportText() {
+  const total   = analysesList.length;
+  const ok      = analysesList.filter(a => a.complete === 1).length;
+  const fail    = analysesList.filter(a => a.complete === 0).length;
+  const pending = total - ok - fail;
+  const pctOk   = total ? Math.round(ok / total * 100) : 0;
+  const now     = new Date().toLocaleDateString('es-MX', {year:'numeric',month:'long',day:'numeric'});
+
+  const groupMap = {};
+  analysesList.forEach(a => {
+    const g = a.scenario_group_id || '(sin grupo)';
+    if (!groupMap[g]) groupMap[g] = {id:g, ok:0, fail:0, pend:0};
+    if (a.complete === 1) groupMap[g].ok++; else if (a.complete === 0) groupMap[g].fail++; else groupMap[g].pend++;
+  });
+
+  const lines = [
+    'REPORTE EJECUTIVO QA',
+    `Fecha: ${now}`,
+    '='.repeat(60),
+    '',
+    'RESUMEN GENERAL',
+    `  Total analizados : ${total}`,
+    `  Tasa de éxito    : ${pctOk}%`,
+    `  Cumplidos        : ${ok}`,
+    `  Fallidos         : ${fail}`,
+    `  Sin evaluar      : ${pending}`,
+    '',
+    'RESULTADOS POR GRUPO',
+    '  Grupo                  Total  Cumplido  Fallido  Sin eval.',
+    '  ' + '-'.repeat(58),
+    ...Object.values(groupMap).map(g => {
+      const t = g.ok + g.fail + g.pend;
+      return `  ${g.id.padEnd(22)} ${String(t).padEnd(6)} ${String(g.ok).padEnd(9)} ${String(g.fail).padEnd(8)} ${g.pend}`;
+    }),
+    '',
+    'CASOS FALLIDOS',
+    ...analysesList.filter(a => a.complete === 0).slice(0, 20).map(a =>
+      `\n  [${a.session_id?.slice(0,16)||'?'}] ${a.scenario_group_id||''} | ${a.scenario||''}\n  ${(a.analysis||'').slice(0,300)}`
+    ),
+  ];
+  return lines.join('\n');
+}
+
+function copyReport() {
+  navigator.clipboard.writeText(_reportText()).then(() => {
+    const btn = document.querySelector('#report-overlay .report-head-actions .btn-ghost');
+    if (btn) { const t = btn.textContent; btn.textContent = '¡Copiado!'; setTimeout(() => btn.textContent = t, 2000); }
+  });
+}
+
+function downloadReport() {
+  const blob = new Blob([_reportText()], {type: 'text/plain;charset=utf-8'});
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = `reporte-qa-${new Date().toISOString().slice(0,10)}.txt`;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 // ── CASES ──────────────────────────────────────────────────────────────────────
