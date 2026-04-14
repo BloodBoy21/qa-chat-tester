@@ -1,5 +1,6 @@
 import os
 import json
+import uuid
 import functools
 import inspect
 from typing import Callable, Any, List
@@ -43,6 +44,10 @@ class AgentBase:
         self.tools = tools or []
         self.sub_agents = sub_agents or []
         self.run_id = None
+        # Pre-generated session_id used as fallback when the API response has no session_id.
+        # Injected as a hidden default param so every send_to_agent call has a consistent
+        # identifier from the very first call, even before the server assigns one.
+        self._pre_session_id = str(uuid.uuid4())
         # Extract campaigns list from context so it can be injected into tool calls
         self._campaigns = self._extract_campaigns(context)
 
@@ -74,6 +79,7 @@ class AgentBase:
         default_params = {
             "user_id": self.user_id,
             "run_id": self.run_id,
+            "pre_session_id": self._pre_session_id,
         }
 
         sig = inspect.signature(func)

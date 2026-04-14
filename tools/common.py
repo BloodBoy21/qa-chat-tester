@@ -54,6 +54,7 @@ def send_to_agent(
     session_backend: str = "redis",
     persist_session: bool = True,
     run_id: str = "",
+    pre_session_id: str = "",
     scenario_group_id: str = "",
     scenario: str = "",
     *args,
@@ -111,24 +112,29 @@ def send_to_agent(
             response = _http_post(data)
 
         response = clean_response(response)
+
+        # Resolve session_id: response > request > pre_session_id (generated at agent init) > run_id
+        effective_session_id = (
+            response.get("session_id")
+            or session_id
+            or pre_session_id
+            or run_id
+        )
+
         _camps = ", ".join(
             c.get("campaign_name", c.get("id", "?")) for c in (campaigns or [])
         )
-        session_id = response.get("session_id", session_id)
         logger.info(
-            f"[{user_id}] [{session_id}]\n"
+            f"[{user_id}] [{effective_session_id}]\n"
             f"  -> QA : {message}\n"
             f"  <- BOT: {response.get('text', '(empty)')}"
-            + (
-                f"\n  files={"".join(attachments)} images={"".join(images)}"
-                if attachments or images
-                else ""
-            )
+            + (f"\n  files={len(attachments)} images={len(images)}" if attachments or images else "")
             + (f"\n  campaigns: {_camps}" if _camps else "")
         )
         save_interaction(
             message=message,
             answer=response,
+            session_id=effective_session_id,
             user_id=user_id,
             files=attachments,
             images=images,
@@ -147,6 +153,7 @@ def save_interaction(
     message: str,
     answer: dict,
     user_id: str = "default_user",
+    session_id: str = "",
     files: list = None,
     images: list = None,
     run_id: str = "",
@@ -156,6 +163,7 @@ def save_interaction(
 ):
     """
     Save the interaction between the user and the agent to the database.
+    session_id must be pre-resolved by the caller (never extracted here from answer).
     """
     try:
         log_db = LogDB()
@@ -164,7 +172,7 @@ def save_interaction(
             message=message,
             raw_response=json.dumps(answer),
             response=answer.get("text", ""),
-            session_id=answer.get("session_id", ""),
+            session_id=session_id,
             files=files or [],
             images=images or [],
             run_id=run_id,

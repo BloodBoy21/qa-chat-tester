@@ -1144,6 +1144,9 @@ async function stopRun() {
   await syncRunStatus();
 }
 
+const TERM_MAX_LINES = 500;
+let _termLineCount = 0;
+
 function termLine(text, cls = '') {
   const t = document.getElementById('terminal');
   if (!t) return;
@@ -1156,12 +1159,32 @@ function termLine(text, cls = '') {
   div.className = 't-line ' + (cls || auto);
   div.textContent = text;
   t.appendChild(div);
+  _termLineCount++;
+
+  // Prune oldest lines to keep DOM small
+  if (_termLineCount > TERM_MAX_LINES) {
+    const remove = _termLineCount - TERM_MAX_LINES;
+    for (let i = 0; i < remove; i++) {
+      if (t.firstChild) t.removeChild(t.firstChild);
+    }
+    _termLineCount = TERM_MAX_LINES;
+    // Keep a sticky banner so the user knows lines were trimmed
+    if (!t.querySelector('.t-trim-notice')) {
+      const notice = document.createElement('div');
+      notice.className = 't-trim-notice';
+      notice.style.cssText = 'color:var(--muted);font-size:10px;padding:2px 0;border-bottom:1px solid var(--border);margin-bottom:4px';
+      notice.textContent = `-- mostrando últimas ${TERM_MAX_LINES} líneas --`;
+      t.insertBefore(notice, t.firstChild);
+    }
+  }
+
   t.scrollTop = t.scrollHeight;
 }
 
 function clearTerminal() {
   const t = document.getElementById('terminal');
   if (t) t.innerHTML = '';
+  _termLineCount = 0;
 }
 
 // keep old name working (used elsewhere if any)
