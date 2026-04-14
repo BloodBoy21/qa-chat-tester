@@ -458,7 +458,6 @@ async def main():
 
     cli = _parse_args()
     model = cli.get("model", DEFAULT_MODEL)
-    max_iterations = int(cli.get("max_iterations", 30))
     batch_size = int(cli.get("batch_size", 10))
 
     json_file_path = cli.get("json_file")
