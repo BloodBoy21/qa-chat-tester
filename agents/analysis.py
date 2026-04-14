@@ -56,34 +56,28 @@ class AnalysisAgent(AgentBase):
     - Si no hay mensajes: tu análisis es "No se obtuvieron mensajes para
     session_id X. Posible error en la conversación o ID inválido."
 
-    ### Step 3 — ALWAYS call `save_analysis`
+    ### Step 3 — Evalúa si la conversación cumplió su objetivo según el contexto.
+    - Si SÍ se cumplió → complete = true
+    - Si NO se cumplió o hubo error → complete = false
+
+    ### Step 4 — ALWAYS call `save_analysis`
     - OBLIGATORIO en TODOS los casos, exitoso o no.
-    - Análisis exitoso → guarda el análisis completo.
-    - Sin datos / error → guarda explicación del fallo.
+    - Pasa `analysis` con el texto del análisis e `complete` con el valor booleano que determinaste en Step 3.
     - NUNCA respondas sin haber ejecutado esta tool.
-
-
-    ### Step 4 — Evalúa si la conversación cumplió su objetivo según el contexto.
-    - Si NO se cumplió el objetivo → "complete": false + explicación en "insights".
-    - Si SÍ se cumplió el objetivo → "complete": true + insights detallados.
 
     ### Step 5 — Return JSON
     ```json
     {{{{
         "insights": "<análisis detallado o razón de fallo — NUNCA vacío>",
-        "complete": <true | false> // si la conversación cumplió su objetivo según tu análisis
+        "complete": <true | false>
     }}}}
     ```
 
     ## CRITICAL CONSTRAINTS:
-    - Steps 1 y 3 son OBLIGATORIOS. No hay escenario válido donde se omitan.
+    - Steps 1 y 4 son OBLIGATORIOS. No hay escenario válido donde se omitan.
     - "insights" NUNCA puede ser string vacío.
-    - Si no puedes analizar → "complete": false + explicación en "insights".
-    - Siempre la respuesta final debe seguir el formato JSON EXACTO del Step 5, sin excepciones. 'insights' debe contener un análisis detallado basado en los mensajes, o una explicación clara de por qué no se pudo obtener un análisis (ej. error, falta de datos) y 'complete' debe reflejar si se cumplió el objetivo de la conversación según tu análisis. Estos nunca pueden ser omitidos o dejados vacíos en la respuesta.
-
-    RECUERDA QUE DEBES RESPONDER SIEMPRE CON EL JSON INDICADO EN EL STEP 5, PERO SOLO DESPUÉS DE HABER EJECUTADO LA TOOL `save_analysis`. NUNCA RESPONDAS ANTES DE HABER GUARDADO EL ANÁLISIS, INCLUSO SI EL ANÁLISIS ES QUE NO SE OBTUVIERON MENSAJES O HUBO UN ERROR. SI NO PUEDES OBTENER LOS MENSAJES, TU RESPUESTA DEBE EXPLICAR EL PROBLEMA Y DEBE INDICAR QUE LA CONVERSACIÓN NO SE COMPLETÓ, PERO DEBES ASEGURARTE DE GUARDAR ESTA INFORMACIÓN USANDO LA TOOL `save_analysis` ANTES DE RESPONDER CON EL JSON.
-    
-    RECUERDA QUE EL ANÁLISIS DEBE SER DETALLADO Y BASADO EN LOS MENSAJES OBTENIDOS. SI NO HAY MENSAJES, TU ANÁLISIS DEBE EXPLICAR ESTA SITUACIÓN Y NO DEBE QUEDAR VACÍO. SIEMPRE DEBES EJECUTAR EL FLUJO COMPLETO DE HERRAMIENTAS Y RESPUESTA, INCLUSO EN CASO DE ERRORES O FALTA DE DATOS.
+    - `complete` en la llamada a `save_analysis` DEBE coincidir con tu evaluación del Step 3.
+    - Si no puedes analizar → complete=false + explicación en "insights".
     
     ## Context:
     {self.context or "No context provided."}

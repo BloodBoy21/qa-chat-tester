@@ -81,11 +81,9 @@ async def run_analysis_agent(agent, run_id: str, user_id: str, context: str):
         try:
             runner = AgentRunner(user_id=user_id, agent=agent)
             await runner.generate()
-            session_id = log_db.get_session_id_by_run_id(run_id)
-            if session_id is None:
-                raise ValueError(
-                    f"No session_id found for run_id {run_id}. Cannot run AnalysisAgent."
-                )
+            # Use run_id as fallback session_id when no messages were saved to DB.
+            # The AnalysisAgent prompt handles the empty-messages case gracefully.
+            session_id = log_db.get_session_id_by_run_id(run_id) or run_id
             await asyncio.wait_for(
                 runner.from_text(session_id), timeout=ANALYSIS_TIMEOUT
             )
@@ -126,12 +124,7 @@ async def run_analysis_agent_manual(
         messages = log_db.get_by_run_id(run_id)
         res = await runner.from_text(json.dumps(messages))
         logger.debug(f"Manual AnalysisAgent response: {res}")
-        session_id = log_db.get_session_id_by_run_id(run_id)
-        if session_id is None:
-            logger.error(
-                f"No session_id found for run_id {run_id}. Cannot save analysis results."
-            )
-            return
+        session_id = log_db.get_session_id_by_run_id(run_id) or run_id
         if not res:
             logger.warning(
                 f"Manual AnalysisAgent returned empty result for run_id {run_id}."
@@ -236,6 +229,21 @@ async def run_agent(
                 f"{item_label} No analysis for run_id {run_id}. Running AnalysisAgent fallback."
             )
             await run_analysis_agent(analysis_agent, run_id, user_id, context)
+
+        # Absolute last resort: if still no analysis after all retries and manual fallback
+        if not log_db.insight_exists_by_run_id(run_id):
+            fallback_sid = log_db.get_session_id_by_run_id(run_id) or run_id
+            save_analysis(
+                session_id=fallback_sid,
+                run_id=run_id,
+                analysis=json.dumps({
+                    "insights": "No se pudo generar análisis: la conversación no produjo mensajes o todos los intentos fallaron.",
+                    "complete": False,
+                }),
+            )
+            logger.warning(
+                f"{item_label} Emergency fallback analysis saved for run_id {run_id}."
+            )
 
         item_elapsed = (datetime.datetime.now() - item_start).total_seconds()
         logger.info(
