@@ -113,12 +113,14 @@ def send_to_agent(
 
         response = clean_response(response)
 
+        if response.get("detail", {}).get("type") == "RuntimeError":
+            raise Exception(
+                f"Agent error: {response.get('detail',{}.get('message', 'Unknown error'))}"
+            )
+
         # Resolve session_id: response > request > pre_session_id (generated at agent init) > run_id
         effective_session_id = (
-            response.get("session_id")
-            or session_id
-            or pre_session_id
-            or run_id
+            response.get("session_id") or session_id or pre_session_id or run_id
         )
 
         _camps = ", ".join(
@@ -128,7 +130,11 @@ def send_to_agent(
             f"[{user_id}] [{effective_session_id}]\n"
             f"  -> QA : {message}\n"
             f"  <- BOT: {response.get('text', '(empty)')}"
-            + (f"\n  files={len(attachments)} images={len(images)}" if attachments or images else "")
+            + (
+                f"\n  files={len(attachments)} images={len(images)}"
+                if attachments or images
+                else ""
+            )
             + (f"\n  campaigns: {_camps}" if _camps else "")
         )
         save_interaction(
@@ -146,7 +152,10 @@ def send_to_agent(
         return response
     except Exception as e:
         logger.error(f"Error sending message to agent: {e}")
-        return {"error": str(e)}
+        return {
+            "error": str(e),
+            "abort": True,
+        }
 
 
 def save_interaction(
@@ -223,7 +232,11 @@ def save_analysis(
         pass  # use the explicit value
     elif "complete" in analysis_dict:
         complete_val = analysis_dict["complete"]
-        complete = complete_val if isinstance(complete_val, bool) else str(complete_val).lower() == "true"
+        complete = (
+            complete_val
+            if isinstance(complete_val, bool)
+            else str(complete_val).lower() == "true"
+        )
 
     insights_text = analysis_dict.get("insights", "")
     logger.info(
