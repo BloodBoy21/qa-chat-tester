@@ -145,6 +145,14 @@ tr:hover td{background:var(--surface2);cursor:pointer}
 .lb-close{background:rgba(255,255,255,.15);border:none;color:#fff;border-radius:50%;
           width:32px;height:32px;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center}
 .lb-close:hover{background:rgba(255,255,255,.3)}
+.case-box{margin:0 16px;padding:12px 16px;border-radius:10px;background:rgba(99,102,241,.05);border:1px solid rgba(99,102,241,.2);border-left:3px solid #6366f1;font-size:12px;color:var(--text)}
+.case-box summary{cursor:pointer;font-size:10px;text-transform:uppercase;letter-spacing:.07em;font-weight:700;color:#818cf8;user-select:none;list-style:none;display:flex;align-items:center;gap:6px;padding:0}
+.case-box summary::before{content:'▶';font-size:9px;transition:transform .2s}
+.case-box[open] summary::before{transform:rotate(90deg)}
+.case-box .case-body{margin-top:10px;display:grid;grid-template-columns:auto 1fr;gap:4px 12px;align-items:baseline}
+.case-box .case-key{color:var(--muted);white-space:nowrap;font-size:11px}
+.case-box .case-val{color:var(--text);word-break:break-word;white-space:pre-wrap;font-family:monospace;font-size:11px}
+.case-box .case-json{margin-top:8px;background:rgba(0,0,0,.2);border-radius:6px;padding:8px;overflow-x:auto;white-space:pre;font-family:monospace;font-size:11px;color:var(--muted);max-height:200px;overflow-y:auto}
 .insight-box{margin:16px;padding:14px;border-radius:10px;color:var(--text);line-height:1.6;font-size:13px;border-left:3px solid var(--border)}
 .insight-box.ok{background:rgba(74,222,128,.06);border-color:#4ade80}
 .insight-box.fail{background:rgba(248,113,113,.06);border-color:#f87171}
@@ -644,13 +652,14 @@ async function loadConvDetail(sid) {
   const msgs = data.messages || [];
   const insight = data.insight;
 
-  // Capture scroll state BEFORE replacing innerHTML
+  // Capture scroll state and case-box open state BEFORE replacing innerHTML
   const oldScroll = el.querySelector('.conv-messages');
   const isFirstLoad = !oldScroll;
   const atBottom = isFirstLoad || (
     oldScroll.scrollHeight - oldScroll.scrollTop - oldScroll.clientHeight < 60
   );
   const savedTop = oldScroll?.scrollTop ?? 0;
+  const caseWasOpen = el.querySelector('.case-box')?.open ?? false;
 
   const meta = msgs[0] || {};
   const metaCamps = (() => {
@@ -660,6 +669,33 @@ async function loadConvDetail(sid) {
       return arr;
     } catch { return []; }
   })();
+
+  // Build case section HTML
+  const caseHtml = (() => {
+    const caseData = data.case;
+    if (!caseData) return '';
+    const payload = caseData.payload || {};
+    // Known top-level fields to display as key-value pairs
+    const KNOWN = ['user_id','scenario','scenario_group_id','objective','persona','context','account_id','model'];
+    const rows = KNOWN
+      .filter(k => payload[k] !== undefined && payload[k] !== null && payload[k] !== '')
+      .map(k => {
+        const v = typeof payload[k] === 'object' ? JSON.stringify(payload[k]) : String(payload[k]);
+        return `<span class="case-key">${escHtml(k)}</span><span class="case-val">${escHtml(v)}</span>`;
+      }).join('');
+    // Unknown / complex fields → pretty JSON block
+    const unknown = Object.keys(payload).filter(k => !KNOWN.includes(k));
+    const jsonBlock = unknown.length
+      ? `<div class="case-json">${escHtml(JSON.stringify(Object.fromEntries(unknown.map(k=>[k,payload[k]])), null, 2))}</div>`
+      : '';
+    return `
+      <details style="margin:0 16px" class="case-box">
+        <summary>Case usado en esta conversación</summary>
+        <div class="case-body">${rows}</div>
+        ${jsonBlock}
+      </details>`;
+  })();
+
   el.innerHTML = `
     <div class="conv-header">
       <span style="font-family:monospace;font-size:11px;color:var(--muted)">${sid}</span>
@@ -671,6 +707,7 @@ async function loadConvDetail(sid) {
       <span class="badge badge-blue" style="margin-left:auto">${msgs.length} mensajes</span>
       <button class="btn btn-ghost" style="font-size:11px;padding:4px 10px" onclick="copyConversation('${sid}')" title="Copiar conversación completa">Copiar</button>
     </div>
+    ${caseHtml}
     <div class="conv-messages" id="msg-scroll">
       ${msgs.map((m, i) => msgBubble(m, i)).join('')}
     </div>
@@ -684,8 +721,10 @@ async function loadConvDetail(sid) {
     })() : ''}
   `;
 
-  // Restore scroll after paint so scrollHeight is accurate
+  // Restore scroll and case-box open state after paint
   const newScroll = el.querySelector('.conv-messages');
+  const newCase = el.querySelector('.case-box');
+  if (newCase && caseWasOpen) newCase.open = true;
   if (newScroll) {
     requestAnimationFrame(() => {
       newScroll.scrollTop = atBottom ? newScroll.scrollHeight : savedTop;
@@ -705,6 +744,8 @@ function copyConversation(sid) {
   const insight = _currentConvData.insight;
   const meta = msgs[0] || {};
 
+  const casePayload = _currentConvData.case?.payload || null;
+
   const lines = [];
   lines.push('='.repeat(60));
   lines.push(`Conversación: ${sid}`);
@@ -713,6 +754,13 @@ function copyConversation(sid) {
   if (meta.scenario_group_id)  lines.push(`Grupo:         ${meta.scenario_group_id}`);
   if (meta.scenario)           lines.push(`Escenario:     ${meta.scenario}`);
   lines.push(`Mensajes:      ${msgs.length}`);
+  if (casePayload) {
+    lines.push('');
+    lines.push('--- Case ---');
+    Object.entries(casePayload).forEach(([k, v]) => {
+      lines.push(`${k}: ${typeof v === 'object' ? JSON.stringify(v) : v}`);
+    });
+  }
   lines.push('='.repeat(60));
   lines.push('');
 

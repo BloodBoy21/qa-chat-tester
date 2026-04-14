@@ -361,6 +361,16 @@ class Handler(http.server.BaseHTTPRequestHandler):
             "SELECT * FROM insights WHERE session_id=? ORDER BY created_at DESC LIMIT 1",
             (session_id,),
         ).fetchone()
+
+        # Fetch the case payload using the run_id from the first message
+        case_row = None
+        if msgs:
+            run_id = dict(msgs[0]).get("run_id")
+            if run_id:
+                case_row = conn.execute(
+                    "SELECT * FROM cases WHERE run_id=? ORDER BY created_at LIMIT 1",
+                    (run_id,),
+                ).fetchone()
         conn.close()
 
         out = []
@@ -374,9 +384,19 @@ class Handler(http.server.BaseHTTPRequestHandler):
                         pass
             out.append(row)
 
+        case_out = None
+        if case_row:
+            case_out = dict(case_row)
+            if case_out.get("payload"):
+                try:
+                    case_out["payload"] = json.loads(case_out["payload"])
+                except Exception:
+                    pass
+
         self._send_json({
             "messages": out,
             "insight": dict(insight) if insight else None,
+            "case": case_out,
         })
 
     def _export_conversations(self):
