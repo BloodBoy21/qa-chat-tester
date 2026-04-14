@@ -181,6 +181,10 @@ async def _conversation_attempt(
     previous_response = None
     iteration_count = 0
     max_iterations = int(MAX_CHAT_ITERATIONS)
+    exits_run_case = log_db.exits_case_for_run_id(run_id)
+    if not exits_run_case:
+        context_obj = context if isinstance(context, dict) else json.loads(context)
+        log_db.add_case(run_id=run_id, payload=context_obj)
 
     try:
         while True:
@@ -224,7 +228,9 @@ async def _conversation_attempt(
     except KeyboardInterrupt:
         raise
     except Exception as e:
-        logger.error(f"{item_label} [A{attempt}] Error at iteration {iteration_count}: {e}")
+        logger.error(
+            f"{item_label} [A{attempt}] Error at iteration {iteration_count}: {e}"
+        )
 
     got_messages = len(log_db.get_by_run_id(run_id)) > 0
     return got_messages, analysis_agent_built
@@ -273,12 +279,14 @@ async def run_agent(
             got_messages = False
 
         if got_messages:
-            logger.info(f"{item_label} [A{attempt}] Conversation produced messages. OK.")
+            logger.info(
+                f"{item_label} [A{attempt}] Conversation produced messages. OK."
+            )
             break
 
         # No messages generated — decide whether to retry
         if attempt < MAX_CONV_RETRIES:
-            backoff = 2 ** attempt  # 2s, 4s
+            backoff = 2**attempt  # 2s, 4s
             logger.warning(
                 f"{item_label} [A{attempt}] No messages. "
                 f"Retrying in {backoff}s... ({MAX_CONV_RETRIES - attempt} left)"
@@ -293,14 +301,16 @@ async def run_agent(
             save_analysis(
                 session_id=run_id,
                 run_id=run_id,
-                analysis=json.dumps({
-                    "insights": (
-                        f"Fallo tras {MAX_CONV_RETRIES} intentos: el agente no generó "
-                        f"mensajes en ningún intento (final=True, has_content=False). "
-                        f"Contexto: {ctx_preview}"
-                    ),
-                    "complete": False,
-                }),
+                analysis=json.dumps(
+                    {
+                        "insights": (
+                            f"Fallo tras {MAX_CONV_RETRIES} intentos: el agente no generó "
+                            f"mensajes en ningún intento (final=True, has_content=False). "
+                            f"Contexto: {ctx_preview}"
+                        ),
+                        "complete": False,
+                    }
+                ),
             )
 
     # ── Post-run: ensure analysis exists ─────────────────────────────────────
@@ -310,19 +320,25 @@ async def run_agent(
             logger.warning(
                 f"{item_label} No analysis for run_id {final_run_id}. Running AnalysisAgent fallback."
             )
-            await run_analysis_agent(final_analysis_agent, final_run_id, user_id, context)
+            await run_analysis_agent(
+                final_analysis_agent, final_run_id, user_id, context
+            )
 
         if not log_db.insight_exists_by_run_id(final_run_id):
             fallback_sid = log_db.get_session_id_by_run_id(final_run_id) or final_run_id
             save_analysis(
                 session_id=fallback_sid,
                 run_id=final_run_id,
-                analysis=json.dumps({
-                    "insights": "No se pudo generar análisis tras todos los intentos.",
-                    "complete": False,
-                }),
+                analysis=json.dumps(
+                    {
+                        "insights": "No se pudo generar análisis tras todos los intentos.",
+                        "complete": False,
+                    }
+                ),
             )
-            logger.warning(f"{item_label} Emergency analysis saved for run_id {final_run_id}.")
+            logger.warning(
+                f"{item_label} Emergency analysis saved for run_id {final_run_id}."
+            )
 
     item_elapsed = (datetime.datetime.now() - item_start).total_seconds()
     logger.info(f"{item_label} DONE | Duration: {fmt_duration(item_elapsed)}")

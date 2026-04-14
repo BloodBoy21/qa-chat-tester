@@ -44,6 +44,20 @@ class LogDB:
                 WHERE log_id = NEW.log_id;
             END;
 
+            CREATE TABLE IF NOT EXISTS cases (
+                case_id      INTEGER PRIMARY KEY AUTOINCREMENT,
+                run_id       TEXT NOT NULL,
+                payload      TEXT,
+                created_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+                updated_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+            );
+            CREATE TRIGGER IF NOT EXISTS cases_updated_at
+            AFTER UPDATE ON cases
+            BEGIN
+                UPDATE cases SET updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
+                WHERE case_id = NEW.case_id;
+            END;
+
             CREATE TABLE IF NOT EXISTS insights (
                 insight_id   INTEGER PRIMARY KEY AUTOINCREMENT,
                 session_id   TEXT NOT NULL,
@@ -173,6 +187,67 @@ class LogDB:
     def delete(self, log_id):
         self._conn.execute("DELETE FROM logs WHERE log_id = ?", (log_id,))
         self._conn.commit()
+
+    # ── cases ──
+
+    def add_case(self, run_id, payload):
+        now = self._now()
+        with self._lock:
+            cursor = self._conn.execute(
+                """
+                INSERT INTO cases (run_id, payload, created_at, updated_at)
+                VALUES (?, ?, ?, ?)
+                """,
+                (run_id, json.dumps(payload), now, now),
+            )
+            self._conn.commit()
+        return cursor.lastrowid
+
+    def get_case(self, case_id):
+        row = self._conn.execute(
+            "SELECT * FROM cases WHERE case_id = ?", (case_id,)
+        ).fetchone()
+        return self._row_to_case(row)
+
+    def get_cases_by_run_id(self, run_id):
+        rows = self._conn.execute(
+            "SELECT * FROM cases WHERE run_id = ? ORDER BY created_at",
+            (run_id,),
+        ).fetchall()
+        return [self._row_to_case(r) for r in rows]
+
+    def exits_case_for_run_id(self, run_id):
+        row = self._conn.execute(
+            "SELECT 1 FROM cases WHERE run_id = ? LIMIT 1", (run_id,)
+        ).fetchone()
+        return row is not None
+
+    def update_case(self, case_id, **fields):
+        allowed = {"run_id", "payload"}
+        to_update = {k: v for k, v in fields.items() if k in allowed}
+        if not to_update:
+            return
+        if "payload" in to_update and to_update["payload"] is not None:
+            to_update["payload"] = json.dumps(to_update["payload"])
+        sets = ", ".join(f"{k} = ?" for k in to_update)
+        vals = list(to_update.values()) + [case_id]
+        self._conn.execute(f"UPDATE cases SET {sets} WHERE case_id = ?", vals)
+        self._conn.commit()
+
+    def delete_case(self, case_id):
+        self._conn.execute("DELETE FROM cases WHERE case_id = ?", (case_id,))
+        self._conn.commit()
+
+    def _row_to_case(self, row):
+        if not row:
+            return None
+        data = dict(row)
+        if data.get("payload"):
+            try:
+                data["payload"] = json.loads(data["payload"])
+            except (json.JSONDecodeError, TypeError):
+                pass
+        return data
 
     # ── insights ──
 
