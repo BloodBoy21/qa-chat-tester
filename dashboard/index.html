@@ -145,10 +145,14 @@ tr:hover td{background:var(--surface2);cursor:pointer}
 .lb-close{background:rgba(255,255,255,.15);border:none;color:#fff;border-radius:50%;
           width:32px;height:32px;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center}
 .lb-close:hover{background:rgba(255,255,255,.3)}
-.insight-box{margin:16px;padding:14px;background:rgba(0,212,170,.06);border:1px solid rgba(0,212,170,.25);
-             border-radius:10px;color:var(--text);line-height:1.6;font-size:13px}
-.insight-box .insight-label{font-size:10px;text-transform:uppercase;letter-spacing:.07em;
-                            color:var(--accent2);font-weight:700;margin-bottom:8px}
+.insight-box{margin:16px;padding:14px;border-radius:10px;color:var(--text);line-height:1.6;font-size:13px;border-left:3px solid var(--border)}
+.insight-box.ok{background:rgba(74,222,128,.06);border-color:#4ade80}
+.insight-box.fail{background:rgba(248,113,113,.06);border-color:#f87171}
+.insight-box.pending{background:rgba(251,191,36,.06);border-color:#fbbf24}
+.insight-box .insight-label{font-size:10px;text-transform:uppercase;letter-spacing:.07em;font-weight:700;margin-bottom:8px;display:flex;align-items:center;gap:8px}
+.insight-box.ok .insight-label{color:#4ade80}
+.insight-box.fail .insight-label{color:#f87171}
+.insight-box.pending .insight-label{color:#fbbf24}
 .back-btn{margin-bottom:16px}
 
 /* ── CASES EDITOR ── */
@@ -633,6 +637,7 @@ async function renderConvDetail(c, sid) {
 
 async function loadConvDetail(sid) {
   const data = await api('GET', `/api/conversations/${encodeURIComponent(sid)}`);
+  _currentConvData = data;
   const el = document.getElementById('conv-detail-wrap');
   if (!el) return;
 
@@ -664,16 +669,19 @@ async function loadConvDetail(sid) {
       ${meta.run_id ? `<span class="tag" style="font-family:monospace">run: ${meta.run_id.slice(0,12)}…</span>` : ''}
       ${metaCamps.map(c => `<span class="tag" style="color:var(--accent2);border-color:rgba(0,212,170,.3)" title="ID: ${escHtml(c.campaign_id||'')} | Template: ${escHtml(c.whatsapp_template_name||'')}">📣 ${escHtml(c.campaign_name||c.campaign_id||'–')}</span>`).join('')}
       <span class="badge badge-blue" style="margin-left:auto">${msgs.length} mensajes</span>
+      <button class="btn btn-ghost" style="font-size:11px;padding:4px 10px" onclick="copyConversation('${sid}')" title="Copiar conversación completa">Copiar</button>
     </div>
     <div class="conv-messages" id="msg-scroll">
       ${msgs.map((m, i) => msgBubble(m, i)).join('')}
     </div>
-    ${insight ? `
-    <div class="insight-box">
-      <div class="insight-label">Análisis / Insight ${insight.complete ? '✓' : '(en progreso)'}</div>
-      <div style="white-space:pre-wrap">${escHtml(insight.analysis||'')}</div>
-      <div style="font-size:10px;color:var(--muted);margin-top:8px">${fmtDate(insight.created_at)}</div>
-    </div>` : ''}
+    ${insight ? (() => {
+      const cls = insight.complete === 1 ? 'ok' : insight.complete === 0 ? 'fail' : 'pending';
+      const label = insight.complete === 1 ? '✓ Objetivo cumplido' : insight.complete === 0 ? '✗ Objetivo no cumplido' : '⏳ Sin evaluar';
+      return `<div class="insight-box ${cls}">
+        <div class="insight-label">${label}<span style="font-weight:400;font-size:10px;color:var(--muted)">${fmtDate(insight.created_at)}</span></div>
+        <div style="white-space:pre-wrap">${escHtml(insight.analysis||'(sin texto)')}</div>
+      </div>`;
+    })() : ''}
   `;
 
   // Restore scroll after paint so scrollHeight is accurate
@@ -687,6 +695,64 @@ async function loadConvDetail(sid) {
 
 // Store raw_response data indexed by turn for the modal
 const _rawStore = {};
+
+// Cache last-loaded conversation data so copyConversation() can access it
+let _currentConvData = null;
+
+function copyConversation(sid) {
+  if (!_currentConvData) return;
+  const msgs = _currentConvData.messages || [];
+  const insight = _currentConvData.insight;
+  const meta = msgs[0] || {};
+
+  const lines = [];
+  lines.push('='.repeat(60));
+  lines.push(`Conversación: ${sid}`);
+  if (meta.run_id)             lines.push(`Run ID:        ${meta.run_id}`);
+  if (meta.user_id)            lines.push(`Usuario:       ${meta.user_id}`);
+  if (meta.scenario_group_id)  lines.push(`Grupo:         ${meta.scenario_group_id}`);
+  if (meta.scenario)           lines.push(`Escenario:     ${meta.scenario}`);
+  lines.push(`Mensajes:      ${msgs.length}`);
+  lines.push('='.repeat(60));
+  lines.push('');
+
+  msgs.forEach((m, i) => {
+    const n = i + 1;
+    const camps = (() => {
+      try {
+        const c = m.campaigns;
+        const arr = Array.isArray(c) ? c : (typeof c === 'string' ? JSON.parse(c) : []);
+        return arr;
+      } catch { return []; }
+    })();
+    if (camps.length) {
+      const names = camps.map(c => c.campaign_name || c.campaign_id || '?').join(', ');
+      lines.push(`[Campaña: ${names}]`);
+    }
+    lines.push(`[${n}] QA : ${m.message || ''}`);
+    lines.push(`[${n}] BOT: ${m.response || ''}`);
+    lines.push('');
+  });
+
+  if (insight) {
+    lines.push('-'.repeat(60));
+    const status = insight.complete === 1 ? 'Objetivo cumplido' : insight.complete === 0 ? 'Objetivo no cumplido' : 'Sin evaluar';
+    lines.push(`Análisis (${status}):`);
+    lines.push(insight.analysis || '(sin texto)');
+    lines.push('-'.repeat(60));
+  }
+
+  const text = lines.join('\n');
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = document.querySelector(`[onclick="copyConversation('${sid}')"]`);
+    if (btn) {
+      const orig = btn.textContent;
+      btn.textContent = 'Copiado!';
+      btn.disabled = true;
+      setTimeout(() => { btn.textContent = orig; btn.disabled = false; }, 2000);
+    }
+  }).catch(err => console.error('Clipboard error:', err));
+}
 
 function msgBubble(m, idx) {
   const n = idx + 1;
@@ -848,6 +914,7 @@ document.getElementById('rawModal').addEventListener('click', e => {
 function backToConvList() {
   clearInterval(pollTimer);
   currentConvId = null;
+  _currentConvData = null;
   renderConversations(document.getElementById('content'));
 }
 
