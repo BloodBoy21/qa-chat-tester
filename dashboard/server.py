@@ -23,16 +23,29 @@ CASES_PATH = ROOT / "cases.json"
 HTML_PATH = Path(__file__).resolve().parent / "index.html"
 
 # ── Global run state ──────────────────────────────────────────────────────────
+import signal as _signal
+
 _run_lock = threading.Lock()
 _run_state = {
     "running": False,
-    "pid": None,
+    "pgid": None,       # process group id — used to kill entire tree
     "output": [],
     "returncode": None,
     "started_at": None,
 }
 _sse_clients: list[queue.Queue] = []
 _sse_lock = threading.Lock()
+
+
+def _kill_pgid(pgid: int):
+    """Send SIGTERM then immediately SIGKILL to an entire process group."""
+    for sig in (_signal.SIGTERM, _signal.SIGKILL):
+        try:
+            os.killpg(pgid, sig)
+        except ProcessLookupError:
+            break   # group already gone
+        except Exception:
+            pass
 
 
 def _broadcast(line: str | None):
@@ -461,21 +474,15 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
     def _run_status(self):
         with _run_lock:
-            # If we think it's running, verify the PID is actually alive
-            if _run_state["running"] and _run_state["pid"]:
+            # Verify the process group is still alive
+            if _run_state["running"] and _run_state["pgid"]:
                 try:
-                    os.kill(_run_state["pid"], 0)  # signal 0 = existence check only
+                    os.killpg(_run_state["pgid"], 0)
                 except (ProcessLookupError, PermissionError):
-                    # Process is gone (killed externally or crashed)
                     _run_state["running"]    = False
                     _run_state["returncode"] = -1
-                    _run_state["pid"]        = None
+                    _run_state["pgid"]       = None
                     _broadcast(None)
-                    # Clean up any lingering subprocesses
-                    subprocess.run(
-                        ["pkill", "-9", "-f", "main.py.*batch_runner"],
-                        capture_output=True,
-                    )
 
             self._send_json({
                 "running":     _run_state["running"],
@@ -534,6 +541,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
         batch_size  = int(data.get("batch_size", 20))
         max_workers = int(data.get("max_workers", 10))
+        max_items   = int(data.get("max_items", 0))
         json_file   = data.get("json_file", "cases.json")
 
         with _run_lock:
@@ -541,7 +549,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 self._send_json({"error": "Ya hay una ejecución en curso"}, 409)
                 return
             _run_state.update(
-                running=True, pid=None, output=[], returncode=None,
+                running=True, pgid=None, output=[], returncode=None,
                 started_at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
             )
 
@@ -552,24 +560,34 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 f"json_file={json_file}",
                 f"batch_size={batch_size}",
                 f"max_workers={max_workers}",
+                f"max_items={max_items}",
             ]
             try:
                 proc = subprocess.Popen(
-                    cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                    cmd,
+                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                     text=True, cwd=str(ROOT),
+                    preexec_fn=os.setsid,   # own process group → killpg kills all children
                 )
+                pgid = os.getpgid(proc.pid)
                 with _run_lock:
-                    _run_state["pid"] = proc.pid
+                    _run_state["pgid"] = pgid
+
                 for raw in proc.stdout:
                     line = raw.rstrip()
                     with _run_lock:
+                        # If we were stopped externally, drain and discard
+                        if not _run_state["running"]:
+                            break
                         _run_state["output"].append(line)
                     _broadcast(line)
+
                 proc.wait()
                 with _run_lock:
-                    _run_state["running"]    = False
-                    _run_state["returncode"] = proc.returncode
-                    _run_state["pid"]        = None
+                    if _run_state["running"]:   # not already stopped by _stop_run
+                        _run_state["running"]    = False
+                        _run_state["returncode"] = proc.returncode
+                        _run_state["pgid"]       = None
             except Exception as exc:
                 with _run_lock:
                     _run_state["running"]    = False
@@ -577,47 +595,31 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     _run_state["output"].append(f"ERROR: {exc}")
                 _broadcast(f"ERROR: {exc}")
             finally:
-                _broadcast(None)  # sentinel → SSE "done"
+                _broadcast(None)   # sentinel → SSE clients get "done" event
 
         threading.Thread(target=_worker, daemon=True).start()
         self._send_json({"ok": True})
 
     def _stop_run(self):
         with _run_lock:
-            pid = _run_state.get("pid")
+            pgid    = _run_state.get("pgid")
+            running = _run_state.get("running")
 
-        msgs = []
-
-        # 1. Kill main batch_runner process
-        if pid:
-            try:
-                import signal
-                os.kill(pid, signal.SIGTERM)
-                msgs.append(f"SIGTERM → PID {pid}")
-            except ProcessLookupError:
-                msgs.append(f"PID {pid} ya no existe")
-            except Exception as e:
-                msgs.append(f"Error killing PID {pid}: {e}")
-
-        # 2. Kill any lingering main.py subprocesses spawned by batch_runner
-        try:
-            result = subprocess.run(
-                ["pkill", "-9", "-f", "main.py.*batch_runner"],
-                capture_output=True, text=True,
-            )
-            # pkill exits 0 if it killed something, 1 if no match
-            if result.returncode == 0:
-                msgs.append("pkill -9 main.py subprocesos OK")
-            else:
-                msgs.append("pkill: sin subprocesos activos")
-        except Exception as e:
-            msgs.append(f"pkill error: {e}")
-
-        if not pid and not msgs:
+        if not running:
             self._send_json({"error": "No hay proceso activo"}, 400)
             return
 
-        self._send_json({"ok": True, "message": " | ".join(msgs)})
+        # Kill the entire process group (batch_runner + all main.py children)
+        if pgid:
+            _kill_pgid(pgid)
+
+        with _run_lock:
+            _run_state["running"]    = False
+            _run_state["returncode"] = -1
+            _run_state["pgid"]       = None
+
+        _broadcast(None)   # notify SSE clients
+        self._send_json({"ok": True})
 
 
 # ── Entry point ───────────────────────────────────────────────────────────────

@@ -175,6 +175,7 @@ textarea.code{width:100%;background:#0d1117;color:#e6edf3;border:none;padding:16
 .terminal .t-line.err{color:#f87171}
 .terminal .t-line.ok{color:#4ade80}
 .terminal .t-line.info{color:#93c5fd}
+.terminal .t-line.warn{color:#fbbf24}
 .terminal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
 .run-status{display:flex;align-items:center;gap:8px;font-size:12px}
 .pulse{animation:pulse 1.2s infinite}
@@ -1014,109 +1015,147 @@ async function saveCases() {
 }
 
 // ── RUN ──────────────────────────────────────────────────────────────────────
-async function renderRun(c) {
-  c.innerHTML = `
-    <div class="run-form">
-      <div class="section-title">Parámetros</div>
-      <div class="form-row">
-        <div class="form-group">
-          <label>JSON File</label>
-          <input id="run-json-file" value="cases.json"/>
-        </div>
-        <div class="form-group">
-          <label>Batch Size</label>
-          <input id="run-batch-size" type="number" value="20"/>
-        </div>
-        <div class="form-group">
-          <label>Max Workers</label>
-          <input id="run-max-workers" type="number" value="10"/>
-        </div>
-      </div>
-      <div style="display:flex;gap:10px;align-items:center">
-        <button class="btn btn-primary" id="run-btn" onclick="startRun()">▶ Ejecutar</button>
-        <button class="btn btn-danger" id="stop-btn" onclick="stopRun()" disabled>■ Detener</button>
-        <span id="run-status-label" class="run-status" style="color:var(--muted)">–</span>
-      </div>
-    </div>
-    <div class="terminal-header">
-      <div class="section-title" style="margin:0">Output</div>
-      <button class="btn btn-ghost refresh-btn" onclick="clearTerminal()">Limpiar</button>
-    </div>
-    <div class="terminal" id="terminal"></div>
-  `;
-  await refreshRunStatus();
-  pollTimer = setInterval(refreshRunStatus, 3000);
-}
 
-async function startRun() {
-  const jsonFile   = document.getElementById('run-json-file')?.value || 'cases.json';
-  const batchSize  = parseInt(document.getElementById('run-batch-size')?.value || '20');
-  const maxWorkers = parseInt(document.getElementById('run-max-workers')?.value || '10');
-
-  const res = await api('POST', '/api/run', { json_file: jsonFile, batch_size: batchSize, max_workers: maxWorkers });
-  if (res.error) { addTermLine('ERROR: ' + res.error, 'err'); return; }
-
-  clearTerminal();
-  addTermLine(`▶ Iniciando: python batch_runner.py json_file=${jsonFile} batch_size=${batchSize} max_workers=${maxWorkers}`, 'info');
-
+// SSE: connects and receives backlog + live lines. Called on page load and after start.
+function openSse() {
   if (sseSource) { sseSource.close(); sseSource = null; }
   sseSource = new EventSource('/api/run/stream');
   sseSource.onmessage = e => {
     if (e.data === 'null') return;
-    addTermLine(JSON.parse(e.data));
+    termLine(JSON.parse(e.data));
   };
   sseSource.addEventListener('done', () => {
     sseSource.close(); sseSource = null;
-    refreshRunStatus();
+    syncRunStatus();
   });
   sseSource.onerror = () => { sseSource?.close(); sseSource = null; };
-
-  setRunButtons(true);
 }
 
-async function stopRun() {
-  const res = await api('POST', '/api/run/stop', {});
-  addTermLine(res.message || res.error || '?', res.error ? 'err' : 'ok');
+async function renderRun(c) {
+  c.innerHTML = `
+    <div class="card" style="margin-bottom:12px">
+      <div class="card-header" style="padding-bottom:12px">
+        Ejecutar
+        <span id="run-dot" style="font-size:11px;color:var(--muted);font-weight:400;margin-left:8px">–</span>
+      </div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;padding:0 4px 14px">
+        <div class="form-group" style="flex:2;min-width:160px">
+          <label>Archivo JSON</label>
+          <input id="run-json-file" value="cases.json"/>
+        </div>
+        <div class="form-group" style="flex:1;min-width:100px">
+          <label>Batch size</label>
+          <input id="run-batch-size" type="number" value="20" min="1"/>
+        </div>
+        <div class="form-group" style="flex:1;min-width:100px">
+          <label>Max workers</label>
+          <input id="run-max-workers" type="number" value="10" min="1"/>
+        </div>
+        <div class="form-group" style="flex:1;min-width:100px">
+          <label title="0 = todos">Max items <span style="color:var(--muted);font-weight:400">(0=todos)</span></label>
+          <input id="run-max-items" type="number" value="0" min="0"/>
+        </div>
+      </div>
+      <div style="display:flex;gap:10px;padding:0 4px 4px">
+        <button class="btn btn-primary" id="run-btn" onclick="startRun()" style="min-width:110px">
+          ▶ Ejecutar
+        </button>
+        <button class="btn btn-danger" id="stop-btn" onclick="stopRun()" disabled style="min-width:110px">
+          ■ Detener
+        </button>
+      </div>
+    </div>
+    <div class="card" style="flex:1;display:flex;flex-direction:column;min-height:0">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--border)">
+        <span style="font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Output</span>
+        <button class="btn btn-ghost" style="font-size:11px;padding:3px 10px" onclick="clearTerminal()">Limpiar</button>
+      </div>
+      <div class="terminal" id="terminal" style="flex:1"></div>
+    </div>`;
+
+  await syncRunStatus();
+  openSse();
+  pollTimer = setInterval(syncRunStatus, 4000);
 }
 
-async function refreshRunStatus() {
+// Sync button state + dot indicator from server status
+async function syncRunStatus() {
   const s = await api('GET', '/api/run/status');
   if (!s) return;
-  const label = document.getElementById('run-status-label');
-  if (label) {
+
+  const dot = document.getElementById('run-dot');
+  if (dot) {
     if (s.running) {
-      label.innerHTML = `<span class="pulse" style="color:var(--green)">●</span> Corriendo (líneas: ${s.lines})`;
+      dot.innerHTML = `<span class="pulse" style="color:var(--green)">●</span> Corriendo · ${s.lines} líneas · iniciado ${fmtDate(s.started_at)}`;
     } else if (s.returncode === 0) {
-      label.innerHTML = `<span style="color:var(--green)">✓</span> Completado OK`;
+      dot.innerHTML = `<span style="color:var(--green)">✓</span> Completado OK`;
     } else if (s.returncode !== null) {
-      label.innerHTML = `<span style="color:var(--red)">✗</span> Falló (rc=${s.returncode})`;
+      dot.innerHTML = `<span style="color:var(--red)">✗</span> Detenido (rc=${s.returncode})`;
     } else {
-      label.textContent = '–';
+      dot.textContent = 'Sin ejecuciones recientes';
     }
   }
-  setRunButtons(s.running);
-  // If run just ended and we have an SSE open, check
+
+  const rb = document.getElementById('run-btn');
+  const sb = document.getElementById('stop-btn');
+  if (rb) rb.disabled = s.running;
+  if (sb) sb.disabled = !s.running;
+
   if (!s.running && sseSource) { sseSource.close(); sseSource = null; }
 }
 
-function setRunButtons(running) {
+async function startRun() {
+  const jsonFile   = document.getElementById('run-json-file')?.value.trim() || 'cases.json';
+  const batchSize  = parseInt(document.getElementById('run-batch-size')?.value || '20');
+  const maxWorkers = parseInt(document.getElementById('run-max-workers')?.value || '10');
+  const maxItems   = parseInt(document.getElementById('run-max-items')?.value || '0');
+
   const rb = document.getElementById('run-btn');
-  const sb = document.getElementById('stop-btn');
-  if (rb) rb.disabled = running;
-  if (sb) sb.disabled = !running;
+  if (rb) rb.disabled = true;
+
+  const res = await api('POST', '/api/run', { json_file: jsonFile, batch_size: batchSize, max_workers: maxWorkers, max_items: maxItems });
+  if (res.error) {
+    termLine('ERROR: ' + res.error, 'err');
+    if (rb) rb.disabled = false;
+    return;
+  }
+
+  clearTerminal();
+  termLine(`▶ json_file=${jsonFile}  batch_size=${batchSize}  max_workers=${maxWorkers}${maxItems ? '  max_items='+maxItems : ''}`, 'info');
+  openSse();          // reconnect to get fresh stream (server resets output on start)
+  await syncRunStatus();
 }
 
-function addTermLine(text, cls = '') {
+async function stopRun() {
+  const sb = document.getElementById('stop-btn');
+  if (sb) { sb.disabled = true; sb.textContent = 'Deteniendo…'; }
+
+  const res = await api('POST', '/api/run/stop', {});
+
+  if (sb) sb.textContent = '■ Detener';
+
+  if (res.error) {
+    termLine('ERROR al detener: ' + res.error, 'err');
+  } else {
+    termLine('■ Proceso terminado.', 'ok');
+  }
+
+  if (sseSource) { sseSource.close(); sseSource = null; }
+  await syncRunStatus();
+}
+
+function termLine(text, cls = '') {
   const t = document.getElementById('terminal');
   if (!t) return;
-  const line = document.createElement('div');
-  line.className = 't-line ' + (
-    cls || (text.includes('ERROR') || text.includes('FAIL') ? 'err' :
-            text.includes('OK') || text.includes('✓') ? 'ok' :
-            text.includes('INFO') || text.includes('Batch') ? 'info' : '')
-  );
-  line.textContent = text;
-  t.appendChild(line);
+  const auto = text.includes('ERROR') || text.includes('FAIL') ? 'err'
+             : text.includes(' | OK') || text.includes('✓') || text.includes('DONE') ? 'ok'
+             : text.includes('WARNING') ? 'warn'
+             : text.includes('INFO') || text.includes('BATCH') || text.includes('Batch') ? 'info'
+             : '';
+  const div = document.createElement('div');
+  div.className = 't-line ' + (cls || auto);
+  div.textContent = text;
+  t.appendChild(div);
   t.scrollTop = t.scrollHeight;
 }
 
@@ -1124,6 +1163,9 @@ function clearTerminal() {
   const t = document.getElementById('terminal');
   if (t) t.innerHTML = '';
 }
+
+// keep old name working (used elsewhere if any)
+function addTermLine(text, cls) { termLine(text, cls); }
 
 // ── DB CLEAR ──────────────────────────────────────────────────────────────────
 function confirmClearDB() {

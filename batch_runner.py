@@ -34,16 +34,17 @@ args = dict(arg.split("=", 1) for arg in sys.argv[1:] if "=" in arg)
 JSON_FILE = args.get("json_file")
 BATCH_SIZE = int(args.get("batch_size", 10))
 MAX_WORKERS = int(args.get("max_workers", 0))  # 0 = auto
+MAX_ITEMS = int(args.get("max_items", 0))       # 0 = all
 MODEL = args.get("model", os.getenv("MODEL_NAME", "gemini-2.5-flash"))
 
 # Forward any extra args to the child process
 FORWARD_ARGS = {
-    k: v for k, v in args.items() if k not in ("json_file", "batch_size", "max_workers")
+    k: v for k, v in args.items() if k not in ("json_file", "batch_size", "max_workers", "max_items")
 }
 
 
-def load_and_split(file_path: str, batch_size: int) -> list[list[dict]]:
-    """Load JSON array and split into chunks of batch_size."""
+def load_and_split(file_path: str, batch_size: int, max_items: int = 0) -> list[list[dict]]:
+    """Load JSON array, optionally cap at max_items, and split into chunks."""
     with open(file_path, "r") as f:
         data = json.load(f)
 
@@ -51,9 +52,13 @@ def load_and_split(file_path: str, batch_size: int) -> list[list[dict]]:
         raise ValueError("JSON file must contain a top-level array.")
 
     total = len(data)
-    num_batches = math.ceil(total / batch_size)
+    if max_items and max_items < total:
+        data = data[:max_items]
+        logger.info(f"Max items cap: using {max_items} of {total} total")
+
+    num_batches = math.ceil(len(data) / batch_size)
     batches = [data[i * batch_size : (i + 1) * batch_size] for i in range(num_batches)]
-    logger.info(f"Loaded {total} items → {num_batches} batches of up to {batch_size}")
+    logger.info(f"Loaded {len(data)} items → {num_batches} batches of up to {batch_size}")
     return batches
 
 
@@ -102,7 +107,7 @@ def main():
         logger.error(f"File not found: {JSON_FILE}")
         sys.exit(1)
 
-    batches = load_and_split(JSON_FILE, BATCH_SIZE)
+    batches = load_and_split(JSON_FILE, BATCH_SIZE, MAX_ITEMS)
     num_batches = len(batches)
 
     # Use a context manager so temp files are always cleaned up, even on error
