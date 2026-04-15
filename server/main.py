@@ -4,7 +4,9 @@ from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
 from lib.cache import get_cache
-from lib.mongo import client as mongo_client
+from lib.mongo import client as mongo_client, db as mongo_db
+from lib.sql_db import init_db
+from db.repositories import setup_indexes
 from pyrate_limiter import Duration, Limiter, Rate
 from fastapi_limiter.depends import RateLimiter
 
@@ -20,6 +22,10 @@ async def lifespan(app: FastAPI):
     logger.info("Setting up cache")
     cache = get_cache()
     logger.info(f"Cache: {cache.ping()}")
+    logger.info("Setting up SQL tables")
+    init_db()
+    logger.info("Setting up MongoDB indexes")
+    setup_indexes(mongo_db)
     yield
     mongo_client.close()
     logger.info("Shutting down")

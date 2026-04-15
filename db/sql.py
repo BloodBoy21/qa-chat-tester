@@ -1,90 +1,43 @@
-import sqlite3
-import json
+"""
+LogDB — backward-compatible facade backed by MongoDB.
+
+All existing call-sites (main.py, tools/common.py, etc.) continue to work
+without any changes.  Internally, every operation delegates to the typed
+repository classes in db/repositories/.
+
+For new code, import the repositories directly:
+
+    from db.repositories import LogRepository, InsightRepository, ...
+"""
+
+import os
 import threading
-from datetime import datetime, timezone
+
+from lib.mongo import db as _mongo_db
+from db.repositories.log_repository import LogRepository
+from db.repositories.case_repository import CaseRepository
+from db.repositories.insight_repository import InsightRepository
+
+_DEFAULT_ACCOUNT_ID = os.getenv("DEFAULT_ACCOUNT_ID", "default")
 
 
 class LogDB:
     _instance = None
     _lock = threading.Lock()
 
-    def __new__(cls, db_path="logs.db"):
-        if cls._instance is None:
-            cls._instance = super().__new__(cls)
-            cls._instance._conn = sqlite3.connect(db_path, check_same_thread=False)
-            cls._instance._conn.row_factory = sqlite3.Row
-            cls._instance._conn.execute("PRAGMA journal_mode=WAL")
-            cls._instance._conn.execute("PRAGMA busy_timeout=5000")
-            cls._instance._create_tables()
+    def __new__(cls, *args, **kwargs):
+        with cls._lock:
+            if cls._instance is None:
+                cls._instance = super().__new__(cls)
+                cls._instance._init_repos()
         return cls._instance
 
-    def _create_tables(self):
-        self._conn.executescript(
-            """
-            CREATE TABLE IF NOT EXISTS logs (
-                log_id       INTEGER PRIMARY KEY AUTOINCREMENT,
-                message      TEXT,
-                response     TEXT,
-                raw_response TEXT,
-                files        TEXT,
-                images       TEXT,
-                campaigns    TEXT,
-                user_id      TEXT,
-                session_id   TEXT,
-                run_id       TEXT,
-                scenario_group_id TEXT,
-                scenario     TEXT,
-                created_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
-                updated_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
-            );
-            CREATE TRIGGER IF NOT EXISTS logs_updated_at
-            AFTER UPDATE ON logs
-            BEGIN
-                UPDATE logs SET updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
-                WHERE log_id = NEW.log_id;
-            END;
+    def _init_repos(self):
+        self._logs = LogRepository(_mongo_db["logs"])
+        self._cases = CaseRepository(_mongo_db["cases"])
+        self._insights = InsightRepository(_mongo_db["insights"])
 
-            CREATE TABLE IF NOT EXISTS cases (
-                case_id      INTEGER PRIMARY KEY AUTOINCREMENT,
-                run_id       TEXT NOT NULL,
-                payload      TEXT,
-                created_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
-                updated_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
-            );
-            CREATE TRIGGER IF NOT EXISTS cases_updated_at
-            AFTER UPDATE ON cases
-            BEGIN
-                UPDATE cases SET updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
-                WHERE case_id = NEW.case_id;
-            END;
-
-            CREATE TABLE IF NOT EXISTS insights (
-                insight_id   INTEGER PRIMARY KEY AUTOINCREMENT,
-                session_id   TEXT NOT NULL,
-                run_id       TEXT,
-                analysis     TEXT,
-                complete     INTEGER NOT NULL DEFAULT 0,
-                created_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
-                updated_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
-            );
-            CREATE TRIGGER IF NOT EXISTS insights_updated_at
-            AFTER UPDATE ON insights
-            BEGIN
-                UPDATE insights SET updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
-                WHERE insight_id = NEW.insight_id;
-            END;
-        """
-        )
-        # migrate: add campaigns column if missing
-        cols = {r[1] for r in self._conn.execute("PRAGMA table_info(logs)").fetchall()}
-        if "campaigns" not in cols:
-            self._conn.execute("ALTER TABLE logs ADD COLUMN campaigns TEXT")
-            self._conn.commit()
-
-    def _now(self):
-        return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-
-    # ── logs ──
+    # ── logs ──────────────────────────────────────────────────────────────────
 
     def add(
         self,
@@ -99,229 +52,99 @@ class LogDB:
         run_id=None,
         scenario_group_id=None,
         scenario=None,
+        account_id=None,
     ):
-        now = self._now()
-        with self._lock:
-            cursor = self._conn.execute(
-                """
-                INSERT INTO logs (message, response, raw_response, files, images, campaigns, user_id, session_id, run_id, scenario_group_id, scenario, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    message,
-                    response,
-                    json.dumps(raw_response),
-                    json.dumps(files) if files is not None else None,
-                    json.dumps(images) if images is not None else None,
-                    json.dumps(campaigns) if campaigns is not None else None,
-                    user_id,
-                    session_id,
-                    run_id,
-                    scenario_group_id,
-                    scenario,
-                    now,
-                    now,
-                ),
-            )
-            self._conn.commit()
-        return cursor.lastrowid
+        return self._logs.add(
+            message=message,
+            response=response,
+            raw_response=raw_response,
+            user_id=user_id,
+            session_id=session_id,
+            account_id=account_id or _DEFAULT_ACCOUNT_ID,
+            files=files,
+            images=images,
+            campaigns=campaigns,
+            run_id=run_id,
+            scenario_group_id=scenario_group_id,
+            scenario=scenario,
+        )
 
     def get(self, log_id):
-        row = self._conn.execute(
-            "SELECT * FROM logs WHERE log_id = ?", (log_id,)
-        ).fetchone()
-        return dict(row) if row else None
+        return self._logs.get(log_id)
 
     def get_by_session(self, session_id, run_id=None):
-        if run_id:
-            rows = self._conn.execute(
-                "SELECT * FROM logs WHERE session_id = ? AND run_id = ? ORDER BY created_at",
-                (session_id, run_id),
-            ).fetchall()
-        else:
-            rows = self._conn.execute(
-                "SELECT * FROM logs WHERE session_id = ? ORDER BY created_at",
-                (session_id,),
-            ).fetchall()
-        return [dict(r) for r in rows]
+        return self._logs.get_by_session(session_id, run_id=run_id)
 
     def get_by_run_id(self, run_id):
-        rows = self._conn.execute(
-            "SELECT * FROM logs WHERE run_id = ? ORDER BY created_at",
-            (run_id,),
-        ).fetchall()
-        return [dict(r) for r in rows]
+        return self._logs.get_by_run_id(run_id)
 
     def get_by_user(self, user_id, limit=50):
-        rows = self._conn.execute(
-            "SELECT * FROM logs WHERE user_id = ? ORDER BY created_at DESC LIMIT ?",
-            (user_id, limit),
-        ).fetchall()
-        return [dict(r) for r in rows]
+        return self._logs.get_by_user(user_id, limit=limit)
 
     def update(self, log_id, **fields):
-        allowed = {
-            "message",
-            "response",
-            "raw_response",
-            "files",
-            "images",
-            "campaigns",
-            "user_id",
-            "session_id",
-            "run_id",
-            "scenario_group_id",
-            "scenario",
-        }
-        to_update = {k: v for k, v in fields.items() if k in allowed}
-        if not to_update:
-            return
-        for json_field in ("raw_response", "files", "images", "campaigns"):
-            if json_field in to_update and to_update[json_field] is not None:
-                to_update[json_field] = json.dumps(to_update[json_field])
-        sets = ", ".join(f"{k} = ?" for k in to_update)
-        vals = list(to_update.values()) + [log_id]
-        self._conn.execute(f"UPDATE logs SET {sets} WHERE log_id = ?", vals)
-        self._conn.commit()
+        return self._logs.update(log_id, **fields)
 
     def delete(self, log_id):
-        self._conn.execute("DELETE FROM logs WHERE log_id = ?", (log_id,))
-        self._conn.commit()
+        return self._logs.delete(log_id)
 
-    # ── cases ──
+    # ── cases ─────────────────────────────────────────────────────────────────
 
-    def add_case(self, run_id, payload):
-        now = self._now()
-        with self._lock:
-            cursor = self._conn.execute(
-                """
-                INSERT INTO cases (run_id, payload, created_at, updated_at)
-                VALUES (?, ?, ?, ?)
-                """,
-                (run_id, json.dumps(payload), now, now),
-            )
-            self._conn.commit()
-        return cursor.lastrowid
+    def add_case(self, run_id, payload, account_id=None):
+        return self._cases.add(
+            run_id=run_id,
+            payload=payload,
+            account_id=account_id or _DEFAULT_ACCOUNT_ID,
+        )
 
     def get_case(self, case_id):
-        row = self._conn.execute(
-            "SELECT * FROM cases WHERE case_id = ?", (case_id,)
-        ).fetchone()
-        return self._row_to_case(row)
+        return self._cases.get(case_id)
 
     def get_cases_by_run_id(self, run_id):
-        rows = self._conn.execute(
-            "SELECT * FROM cases WHERE run_id = ? ORDER BY created_at",
-            (run_id,),
-        ).fetchall()
-        return [self._row_to_case(r) for r in rows]
+        return self._cases.get_by_run_id(run_id)
 
     def exits_case_for_run_id(self, run_id):
-        row = self._conn.execute(
-            "SELECT 1 FROM cases WHERE run_id = ? LIMIT 1", (run_id,)
-        ).fetchone()
-        return row is not None
+        return self._cases.exists_for_run_id(run_id)
 
     def update_case(self, case_id, **fields):
-        allowed = {"run_id", "payload"}
-        to_update = {k: v for k, v in fields.items() if k in allowed}
-        if not to_update:
-            return
-        if "payload" in to_update and to_update["payload"] is not None:
-            to_update["payload"] = json.dumps(to_update["payload"])
-        sets = ", ".join(f"{k} = ?" for k in to_update)
-        vals = list(to_update.values()) + [case_id]
-        self._conn.execute(f"UPDATE cases SET {sets} WHERE case_id = ?", vals)
-        self._conn.commit()
+        return self._cases.update(case_id, **fields)
 
     def delete_case(self, case_id):
-        self._conn.execute("DELETE FROM cases WHERE case_id = ?", (case_id,))
-        self._conn.commit()
+        return self._cases.delete(case_id)
 
-    def _row_to_case(self, row):
-        if not row:
-            return None
-        data = dict(row)
-        if data.get("payload"):
-            try:
-                data["payload"] = json.loads(data["payload"])
-            except (json.JSONDecodeError, TypeError):
-                pass
-        return data
+    # ── insights ──────────────────────────────────────────────────────────────
 
-    # ── insights ──
-
-    def add_insight(self, session_id, analysis, complete=False, run_id=None):
-        now = self._now()
-        with self._lock:
-            cursor = self._conn.execute(
-                """
-                INSERT INTO insights (session_id, run_id, analysis, complete, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?)
-                """,
-                (session_id, run_id, analysis, 1 if complete else 0, now, now),
-            )
-            self._conn.commit()
-        return cursor.lastrowid
-
-    def _row_to_insight(self, row):
-        if not row:
-            return None
-        data = dict(row)
-        data["complete"] = bool(data["complete"])
-        return data
+    def add_insight(self, session_id, analysis, complete=False, run_id=None, account_id=None):
+        return self._insights.add(
+            session_id=session_id,
+            analysis=analysis,
+            complete=complete,
+            run_id=run_id,
+            account_id=account_id or _DEFAULT_ACCOUNT_ID,
+        )
 
     def get_insight(self, insight_id):
-        row = self._conn.execute(
-            "SELECT * FROM insights WHERE insight_id = ?", (insight_id,)
-        ).fetchone()
-        return self._row_to_insight(row)
+        return self._insights.get(insight_id)
 
     def get_insight_by_session(self, session_id):
-        row = self._conn.execute(
-            "SELECT * FROM insights WHERE session_id = ? ORDER BY created_at DESC LIMIT 1",
-            (session_id,),
-        ).fetchone()
-        return self._row_to_insight(row)
+        return self._insights.get_by_session(session_id)
 
     def get_insights_by_session(self, session_id):
-        rows = self._conn.execute(
-            "SELECT * FROM insights WHERE session_id = ? ORDER BY created_at",
-            (session_id,),
-        ).fetchall()
-        return [self._row_to_insight(r) for r in rows]
+        return self._insights.get_all_by_session(session_id)
 
     def update_insight(self, insight_id, **fields):
-        allowed = {"analysis", "complete", "run_id"}
-        to_update = {k: v for k, v in fields.items() if k in allowed}
-        if not to_update:
-            return
-        if "complete" in to_update:
-            to_update["complete"] = 1 if to_update["complete"] else 0
-        sets = ", ".join(f"{k} = ?" for k in to_update)
-        vals = list(to_update.values()) + [insight_id]
-        self._conn.execute(f"UPDATE insights SET {sets} WHERE insight_id = ?", vals)
-        self._conn.commit()
+        return self._insights.update(insight_id, **fields)
 
     def delete_insight(self, insight_id):
-        self._conn.execute("DELETE FROM insights WHERE insight_id = ?", (insight_id,))
-        self._conn.commit()
+        return self._insights.delete(insight_id)
 
     def insight_exists_by_run_id(self, run_id):
-        row = self._conn.execute(
-            "SELECT 1 FROM insights WHERE run_id = ? LIMIT 1", (run_id,)
-        ).fetchone()
-        return row is not None
+        return self._insights.exists_by_run_id(run_id)
 
     def get_session_id_by_run_id(self, run_id):
-        row = self._conn.execute(
-            "SELECT session_id FROM logs WHERE run_id = ? ORDER BY created_at DESC LIMIT 1",
-            (run_id,),
-        ).fetchone()
-        return row["session_id"] if row else None
+        return self._logs.get_session_id_by_run_id(run_id)
 
-    # ── lifecycle ──
+    # ── lifecycle ─────────────────────────────────────────────────────────────
 
     def close(self):
-        self._conn.close()
+        # MongoDB connection lifecycle is handled globally in lib/mongo.py
         LogDB._instance = None
