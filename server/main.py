@@ -7,6 +7,7 @@ from lib.cache import get_cache
 from lib.mongo import client as mongo_client, db as mongo_db
 from lib.sql_db import init_db
 from db.repositories import setup_indexes
+from server.api import api_router
 from pyrate_limiter import Duration, Limiter, Rate
 from fastapi_limiter.depends import RateLimiter
 
@@ -61,6 +62,9 @@ async def index():
 @app.get("/health")
 async def health_check():
     return {"status": "ok"}
+
+
+app.include_router(api_router)
 
 
 if __name__ == "__main__":
