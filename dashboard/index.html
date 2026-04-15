@@ -4,2069 +4,1326 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>QA Chat Tester</title>
+<script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/vue@3/dist/vue.global.prod.js"></script>
 <style>
-*{box-sizing:border-box;margin:0;padding:0}
-:root{
-  --bg:#0f1117;--surface:#1a1d27;--surface2:#22263a;--border:#2e3250;
-  --accent:#6c63ff;--accent2:#00d4aa;--danger:#ff4d6d;--warn:#ffd166;
-  --text:#e2e8f0;--muted:#7c85a2;--green:#4ade80;--red:#f87171;
-}
-body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;
-     font-size:14px;display:flex;height:100vh;overflow:hidden}
-
-/* ── SIDEBAR ── */
-.sidebar{width:220px;min-width:220px;background:var(--surface);border-right:1px solid var(--border);
-         display:flex;flex-direction:column;padding:16px 0}
-.sidebar-logo{padding:0 20px 20px;font-size:15px;font-weight:700;color:var(--accent);
-              border-bottom:1px solid var(--border);margin-bottom:8px}
-.sidebar-logo span{color:var(--accent2)}
-.nav-item{display:flex;align-items:center;gap:10px;padding:10px 20px;cursor:pointer;
-          color:var(--muted);transition:.15s;border-left:3px solid transparent;font-size:13px}
-.nav-item:hover{color:var(--text);background:var(--surface2)}
-.nav-item.active{color:var(--accent);border-left-color:var(--accent);background:rgba(108,99,255,.08)}
-.nav-item svg{width:16px;height:16px;flex-shrink:0}
-.sidebar-footer{margin-top:auto;padding:12px 20px;font-size:11px;color:var(--muted);border-top:1px solid var(--border)}
-
-/* ── MAIN ── */
-.main{flex:1;display:flex;flex-direction:column;overflow:hidden}
-.topbar{background:var(--surface);border-bottom:1px solid var(--border);
-        padding:14px 24px;display:flex;align-items:center;justify-content:space-between}
-.topbar h1{font-size:16px;font-weight:600}
-.topbar .status-dot{width:8px;height:8px;border-radius:50%;background:var(--green);display:inline-block;margin-right:6px}
-.topbar .status-dot.red{background:var(--red)}
-.content{flex:1;overflow-y:auto;padding:24px}
-
-/* ── CARDS ── */
-.stats-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:24px}
-.stat-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px}
-.stat-card .label{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px}
-.stat-card .value{font-size:28px;font-weight:700}
-.stat-card .value.accent{color:var(--accent)}
-.stat-card .value.green{color:var(--green)}
-.stat-card .value.teal{color:var(--accent2)}
-.stat-card .value.warn{color:var(--warn)}
-
-/* ── TABLES ── */
-.card{background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:20px}
-.card-header{padding:14px 18px;border-bottom:1px solid var(--border);font-weight:600;
-             display:flex;align-items:center;justify-content:space-between}
-.card-header .actions{display:flex;gap:8px}
-table{width:100%;border-collapse:collapse}
-th{background:var(--surface2);color:var(--muted);font-size:11px;text-transform:uppercase;
-   letter-spacing:.05em;padding:10px 14px;text-align:left;font-weight:600}
-td{padding:10px 14px;border-top:1px solid var(--border);vertical-align:middle;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-tr:hover td{background:var(--surface2);cursor:pointer}
-
-/* ── BUTTONS ── */
-.btn{padding:7px 14px;border-radius:7px;border:none;cursor:pointer;font-size:12px;
-     font-weight:600;transition:.15s;display:inline-flex;align-items:center;gap:6px}
-.btn-primary{background:var(--accent);color:#fff}
-.btn-primary:hover{background:#5a52e0}
-.btn-success{background:#166534;color:#4ade80;border:1px solid #15803d}
-.btn-success:hover{background:#14532d}
-.btn-danger{background:#7f1d1d;color:#fca5a5;border:1px solid #991b1b}
-.btn-danger:hover{background:#450a0a}
-.btn-ghost{background:transparent;color:var(--muted);border:1px solid var(--border)}
-.btn-ghost:hover{color:var(--text);border-color:var(--text)}
+*{box-sizing:border-box}
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:#2e3250;border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:#6c63ff88}
+[v-cloak]{display:none}
+body{background:#0f1117;color:#e2e8f0;font-family:'Segoe UI',system-ui,sans-serif}
+/* Common components */
+.btn{display:inline-flex;align-items:center;gap:5px;padding:6px 13px;border-radius:7px;border:none;cursor:pointer;font-size:12px;font-weight:600;transition:.15s}
 .btn:disabled{opacity:.4;cursor:not-allowed}
-
-/* ── BADGES ── */
-.badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600}
-.badge-green{background:#14532d;color:#4ade80}
-.badge-red{background:#7f1d1d;color:#fca5a5}
-.badge-blue{background:#1e3a5f;color:#93c5fd}
-.badge-gray{background:var(--surface2);color:var(--muted)}
-
-/* ── CONVERSATION DETAIL ── */
-.conv-detail{background:var(--surface);border:1px solid var(--border);border-radius:10px;
-             display:flex;flex-direction:column;height:calc(100vh - 100px)}
-.conv-header{padding:14px 18px;border-bottom:1px solid var(--border);display:flex;
-             align-items:center;gap:10px;flex-wrap:wrap}
-.conv-messages{flex:1;overflow-y:auto;padding:20px 24px;display:flex;flex-direction:column;gap:0}
-/* timeline turn */
-.tl-turn{display:flex;flex-direction:column;gap:0;position:relative;padding-left:16px;margin-bottom:4px;margin-left:32px}
-.tl-turn::before{content:'';position:absolute;left:-6px;top:28px;bottom:0;width:2px;background:var(--border)}
-.tl-turn:last-child::before{display:none}
-/* avatar dot */
-.tl-dot{position:absolute;left:6px;top:10px;width:18px;height:18px;border-radius:50%;
-        display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;flex-shrink:0}
-.tl-dot.user{background:var(--accent);color:#fff}
-.tl-dot.bot{background:var(--surface2);color:var(--accent2);border:1px solid var(--border)}
-/* message row */
-.tl-row{display:flex;flex-direction:column;gap:3px;padding:10px 0 6px}
-.tl-row + .tl-row{padding-top:4px;border-top:1px dashed var(--border);margin-top:2px}
-.tl-who{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;display:flex;align-items:center;gap:6px}
-.tl-who.user{color:var(--accent)}
-.tl-who.bot{color:var(--accent2)}
-.tl-time{font-size:10px;color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0}
-.tl-text{font-size:13px;line-height:1.6;color:var(--text);white-space:pre-wrap;word-break:break-word;
-         padding:8px 12px;background:var(--surface2);border-radius:8px;border:1px solid var(--border);margin-top:2px}
-.tl-row.user .tl-text{background:rgba(108,99,255,.12);border-color:rgba(108,99,255,.25)}
-.tl-turn-num{position:absolute;left:-28px;top:8px;width:22px;height:22px;border-radius:50%;
-             background:var(--surface2);border:1px solid var(--border);color:var(--muted);
-             font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center;
-             cursor:pointer;transition:.15s;user-select:none}
-.tl-turn-num:hover{background:var(--accent);border-color:var(--accent);color:#fff}
-/* campaign trigger banner */
-.tl-campaign{display:flex;align-items:center;gap:6px;padding:5px 10px;margin-bottom:4px;
-             background:rgba(0,212,170,.07);border:1px solid rgba(0,212,170,.25);
-             border-radius:6px;font-size:11px;color:var(--accent2);font-weight:600}
-.tl-campaign-label{font-weight:400;color:var(--muted);margin-left:2px}
-/* raw modal */
-.raw-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);display:flex;align-items:center;
-             justify-content:center;z-index:200;padding:20px}
-.raw-box{background:var(--surface);border:1px solid var(--border);border-radius:12px;
-         width:100%;max-width:780px;max-height:85vh;display:flex;flex-direction:column;overflow:hidden}
-.raw-box-header{padding:14px 18px;border-bottom:1px solid var(--border);display:flex;
-                align-items:center;justify-content:space-between;flex-shrink:0}
-.raw-box-header h3{font-size:14px;font-weight:600}
-.raw-body{overflow-y:auto;padding:16px;flex:1}
-.raw-body pre{font-family:'JetBrains Mono','Fira Code',monospace;font-size:11.5px;
-              line-height:1.65;color:#e6edf3;background:#0d1117;padding:14px;
-              border-radius:8px;white-space:pre-wrap;word-break:break-all;margin:0}
-/* media attachments */
-.tl-media{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
-.tl-thumb{width:80px;height:80px;border-radius:8px;object-fit:cover;cursor:pointer;
-          border:2px solid var(--border);transition:.15s}
-.tl-thumb:hover{border-color:var(--accent);transform:scale(1.04)}
-.tl-file{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;
-         background:var(--surface2);border:1px solid var(--border);border-radius:7px;
-         font-size:12px;color:var(--text);cursor:pointer;text-decoration:none;transition:.15s}
-.tl-file:hover{border-color:var(--accent);color:var(--accent)}
-.tl-file-icon{font-size:16px;line-height:1}
-/* lightbox */
-.lb-overlay{position:fixed;inset:0;background:rgba(0,0,0,.92);display:flex;
-            align-items:center;justify-content:center;z-index:300;padding:20px;cursor:zoom-out}
-.lb-inner{position:relative;max-width:95vw;max-height:90vh;display:flex;flex-direction:column;align-items:center;gap:10px}
-.lb-img{max-width:100%;max-height:82vh;border-radius:8px;object-fit:contain;box-shadow:0 8px 40px #000}
-.lb-pdf{width:90vw;height:85vh;border:none;border-radius:8px}
-.lb-bar{display:flex;align-items:center;gap:12px}
-.lb-caption{color:#ccc;font-size:12px;max-width:60vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.lb-close{background:rgba(255,255,255,.15);border:none;color:#fff;border-radius:50%;
-          width:32px;height:32px;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center}
-.lb-close:hover{background:rgba(255,255,255,.3)}
-.case-panel{margin:0 0 12px 0;border-radius:10px;background:rgba(99,102,241,.05);border:1px solid rgba(99,102,241,.15);overflow:hidden;flex-shrink:0}
-.case-panel-head{padding:8px 14px;display:flex;align-items:center;gap:8px;background:rgba(99,102,241,.07);border-bottom:1px solid rgba(99,102,241,.1)}
-.case-panel-badge{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#818cf8}
-.case-panel-user{font-size:12px;font-weight:600;color:var(--text);flex:1}
-.case-panel-camps{display:flex;flex-wrap:wrap;gap:4px}
-.case-camp-chip{font-size:10px;padding:2px 7px;border-radius:12px;background:rgba(0,212,170,.1);border:1px solid rgba(0,212,170,.25);color:var(--accent2)}
-.case-panel-body{padding:10px 14px;display:flex;flex-direction:column;gap:6px}
-.case-field{display:flex;gap:10px;align-items:flex-start}
-.case-field-lbl{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);min-width:96px;padding-top:2px;flex-shrink:0}
-.case-field-val{font-size:12px;color:var(--text);line-height:1.55;flex:1;word-break:break-word}
-.case-field-val.mono{font-family:monospace;font-size:11px;color:var(--muted)}
-.case-prompt-wrap{position:relative}
-.case-prompt-text{white-space:pre-wrap;overflow:hidden;max-height:52px;transition:max-height .25s ease}
-.case-prompt-text.expanded{max-height:600px}
-.case-prompt-fade{position:absolute;bottom:0;left:0;right:0;height:24px;background:linear-gradient(transparent,rgba(16,17,24,.9));pointer-events:none;transition:opacity .2s}
-.case-prompt-text.expanded+.case-prompt-fade{opacity:0}
-.case-toggle{background:none;border:none;color:#818cf8;font-size:10px;cursor:pointer;padding:2px 0;text-decoration:underline;text-underline-offset:2px}
-.case-toggle:hover{color:#a5b4fc}
-.case-divider{border:none;border-top:1px solid rgba(99,102,241,.1);margin:4px 0}
-.case-extras{display:none;flex-direction:column;gap:6px}
-.case-extras.visible{display:flex}
-.insight-box{margin:16px;padding:14px;border-radius:10px;color:var(--text);line-height:1.6;font-size:13px;border-left:3px solid var(--border)}
-.insight-box.ok{background:rgba(74,222,128,.06);border-color:#4ade80}
-.insight-box.fail{background:rgba(248,113,113,.06);border-color:#f87171}
-.insight-box.pending{background:rgba(251,191,36,.06);border-color:#fbbf24}
-.insight-box .insight-label{font-size:10px;text-transform:uppercase;letter-spacing:.07em;font-weight:700;margin-bottom:8px;display:flex;align-items:center;gap:8px}
-.insight-box.ok .insight-label{color:#4ade80}
-.insight-box.fail .insight-label{color:#f87171}
-.insight-box.pending .insight-label{color:#fbbf24}
-.back-btn{margin-bottom:16px}
-
-/* ── CASES EDITOR ── */
-.editor-wrap{background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden}
-.editor-toolbar{padding:10px 14px;border-bottom:1px solid var(--border);display:flex;gap:8px;align-items:center}
-.editor-status{margin-left:auto;font-size:12px;color:var(--muted)}
-textarea.code{width:100%;background:#0d1117;color:#e6edf3;border:none;padding:16px;
-              font-family:'JetBrains Mono','Fira Code',monospace;font-size:12.5px;
-              line-height:1.65;resize:none;outline:none;tab-size:2;
-              height:calc(100vh - 220px);min-height:300px}
-
-/* ── RUN PANEL ── */
-.run-form{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:20px;margin-bottom:16px}
-.form-row{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px}
-.form-group{display:flex;flex-direction:column;gap:6px;flex:1;min-width:160px}
-.form-group label{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:600}
-.form-group input{background:var(--surface2);border:1px solid var(--border);color:var(--text);
-                  padding:8px 12px;border-radius:7px;font-size:13px;outline:none}
-.form-group input:focus{border-color:var(--accent)}
-.terminal{background:#0d1117;border:1px solid var(--border);border-radius:10px;
-          padding:14px;height:340px;overflow-y:auto;font-family:'JetBrains Mono','Fira Code',monospace;
-          font-size:12px;line-height:1.6;color:#8b949e}
-.terminal .t-line{padding:1px 0}
-.terminal .t-line.err{color:#f87171}
-.terminal .t-line.ok{color:#4ade80}
-.terminal .t-line.info{color:#93c5fd}
-.terminal .t-line.warn{color:#fbbf24}
-.terminal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
-.run-status{display:flex;align-items:center;gap:8px;font-size:12px}
-.pulse{animation:pulse 1.2s infinite}
-@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
-@keyframes spin{to{transform:rotate(360deg)}}
-.spinner-wrap{display:flex;flex-direction:column;align-items:center;justify-content:center;
-              gap:14px;padding:48px;color:var(--muted);font-size:12px;letter-spacing:.04em}
-.spinner{width:32px;height:32px;border-radius:50%;
-         border:3px solid var(--border);
-         border-top-color:var(--accent);
-         animation:spin .7s linear infinite}
-.spinner.sm{width:18px;height:18px;border-width:2px}
-
-/* ── MISC ── */
-.empty-state{text-align:center;padding:48px;color:var(--muted)}
-.empty-state svg{width:40px;height:40px;margin-bottom:12px;opacity:.3}
-.refresh-btn{font-size:11px;padding:5px 10px}
-.section-title{font-size:13px;font-weight:700;color:var(--muted);text-transform:uppercase;
-               letter-spacing:.07em;margin-bottom:14px}
-.tag{display:inline-block;background:var(--surface2);border:1px solid var(--border);
-     border-radius:5px;padding:2px 7px;font-size:11px;color:var(--muted);margin:2px}
-.confirm-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;
-                 align-items:center;justify-content:center;z-index:100}
-.confirm-box{background:var(--surface);border:1px solid var(--border);border-radius:12px;
-             padding:28px;max-width:380px;width:90%;text-align:center}
-.confirm-box h3{font-size:16px;margin-bottom:10px}
-.confirm-box p{color:var(--muted);font-size:13px;margin-bottom:20px;line-height:1.5}
-.confirm-box .actions{display:flex;gap:10px;justify-content:center}
-.hidden{display:none!important}
-
-/* ── SEARCH BAR ── */
-.search-bar{display:flex;gap:8px;align-items:center;padding:12px 14px;border-bottom:1px solid var(--border)}
-.search-select{background:var(--surface2);border:1px solid var(--border);color:var(--text);
-               padding:7px 10px;border-radius:7px;font-size:12px;outline:none;cursor:pointer}
-.search-select:focus{border-color:var(--accent)}
-.search-input{flex:1;background:var(--surface2);border:1px solid var(--border);color:var(--text);
-              padding:7px 12px;border-radius:7px;font-size:12px;outline:none}
-.search-input:focus{border-color:var(--accent)}
-.search-input::placeholder{color:var(--muted)}
-
-/* ── STATUS CHIPS ── */
-.chip{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:20px;font-size:11px;font-weight:600;white-space:nowrap}
+.btn-primary{background:#6c63ff;color:#fff}.btn-primary:hover:not(:disabled){background:#5a52e0}
+.btn-success{background:#14532d;color:#4ade80;border:1px solid #15803d}.btn-success:hover:not(:disabled){background:#166534}
+.btn-danger{background:#7f1d1d;color:#fca5a5;border:1px solid #991b1b}.btn-danger:hover:not(:disabled){background:#450a0a}
+.btn-ghost{background:transparent;color:#7c85a2;border:1px solid #2e3250}.btn-ghost:hover:not(:disabled){color:#e2e8f0;border-color:#e2e8f0}
+.chip{display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600;white-space:nowrap}
 .chip-green{background:rgba(74,222,128,.12);color:#4ade80;border:1px solid rgba(74,222,128,.25)}
 .chip-red{background:rgba(248,113,113,.12);color:#f87171;border:1px solid rgba(248,113,113,.25)}
 .chip-blue{background:rgba(147,197,253,.1);color:#93c5fd;border:1px solid rgba(147,197,253,.2)}
-.chip-gray{background:var(--surface2);color:var(--muted);border:1px solid var(--border)}
 .chip-orange{background:rgba(251,191,36,.1);color:#fbbf24;border:1px solid rgba(251,191,36,.2)}
-
-/* ── ANÁLISIS PAGE ── */
-.analysis-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;
-               padding:16px 18px;margin-bottom:10px;border-left:3px solid var(--border);transition:.15s}
-.analysis-card.ok{border-left-color:var(--green)}
-.analysis-card.fail{border-left-color:var(--red)}
-.analysis-card.pending{border-left-color:var(--warn)}
-.analysis-card:hover{background:var(--surface2)}
-.analysis-meta{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px}
-.analysis-text{font-size:13px;line-height:1.6;color:var(--text);white-space:pre-wrap;
-               word-break:break-word;max-height:72px;overflow:hidden;position:relative}
-.analysis-text::after{content:'';position:absolute;bottom:0;left:0;right:0;height:28px;
-                      background:linear-gradient(transparent,var(--surface))}
-.analysis-text.expanded{max-height:none}
-.analysis-text.expanded::after{display:none}
-.analysis-card:hover .analysis-text::after{background:linear-gradient(transparent,var(--surface2))}
-.analysis-actions{display:flex;gap:8px;align-items:center;margin-top:10px;padding-top:8px;
-                  border-top:1px solid var(--border)}
-/* ── ANÁLISIS CHARTS ── */
-.an-summary{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-bottom:16px}
-.an-stat{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:14px 16px;display:flex;flex-direction:column;gap:4px}
-.an-stat-lbl{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600}
-.an-stat-val{font-size:26px;font-weight:700}
-.an-stat-sub{font-size:11px;color:var(--muted)}
-.an-stat.ok   .an-stat-val{color:var(--green)}
-.an-stat.fail .an-stat-val{color:var(--red)}
-.an-stat.pend .an-stat-val{color:var(--warn)}
-.an-charts-row{display:flex;gap:12px;margin-bottom:12px;flex-wrap:wrap}
-.an-chart-box{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:14px 18px;flex:1;min-width:220px}
-.an-chart-box.wide{flex:2;min-width:280px}
-.an-chart-title{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600;margin-bottom:10px}
-.an-filter-bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:12px 0 10px;border-top:1px solid var(--border);margin-top:4px}
-.an-filter-group{display:flex;gap:4px;flex-wrap:wrap}
-.an-filter-btn{padding:4px 11px;border-radius:20px;border:1px solid var(--border);background:transparent;
-               color:var(--muted);font-size:11px;font-weight:600;cursor:pointer;transition:.15s;white-space:nowrap}
-.an-filter-btn:hover{color:var(--text);border-color:var(--text)}
-.an-filter-btn.active.ok  {background:rgba(74,222,128,.15);border-color:#4ade80;color:#4ade80}
-.an-filter-btn.active.fail{background:rgba(248,113,113,.15);border-color:#f87171;color:#f87171}
-.an-filter-btn.active.pend{background:rgba(251,191,36,.15);border-color:#fbbf24;color:#fbbf24}
-.an-filter-btn.active.all {background:rgba(108,99,255,.15);border-color:var(--accent);color:var(--accent)}
-/* ── PAGINATION ── */
-.an-pagination{display:flex;align-items:center;gap:4px;flex-wrap:wrap}
-.pg-btn{min-width:30px;height:28px;padding:0 7px;border-radius:6px;border:1px solid var(--border);
-        background:transparent;color:var(--muted);font-size:12px;cursor:pointer;transition:.15s;display:inline-flex;align-items:center;justify-content:center}
-.pg-btn:hover:not(:disabled){background:var(--surface2);color:var(--text);border-color:var(--text)}
-.pg-btn.active{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:700}
-.pg-btn:disabled{opacity:.35;cursor:not-allowed}
-.pg-ellipsis{color:var(--muted);font-size:12px;padding:0 4px}
-.pg-info{font-size:11px;color:var(--muted);margin-left:6px;white-space:nowrap}
-/* ── REPORT MODAL ── */
-.report-overlay{position:fixed;inset:0;background:rgba(0,0,0,.75);display:flex;align-items:center;
-                justify-content:center;z-index:200;padding:20px}
-.report-box{background:var(--surface);border:1px solid var(--border);border-radius:12px;
-            width:100%;max-width:860px;max-height:90vh;display:flex;flex-direction:column;overflow:hidden}
-.report-head{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;
-             justify-content:space-between;flex-shrink:0}
-.report-head h3{font-size:15px;font-weight:700}
-.report-head-actions{display:flex;gap:8px}
-.report-body{overflow-y:auto;padding:20px;flex:1;font-size:13px;line-height:1.7}
-.report-section{margin-bottom:24px}
-.report-section h4{font-size:11px;text-transform:uppercase;letter-spacing:.07em;font-weight:700;
-                   color:var(--accent);margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--border)}
-.report-kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:6px}
-.report-kpi{background:var(--surface2);border-radius:8px;padding:10px 14px;text-align:center}
-.report-kpi .rk-val{font-size:22px;font-weight:700;margin-bottom:2px}
-.report-kpi .rk-lbl{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
-.report-kpi.ok .rk-val{color:var(--green)}
-.report-kpi.fail .rk-val{color:var(--red)}
-.report-kpi.pend .rk-val{color:var(--warn)}
-.report-table{width:100%;border-collapse:collapse;font-size:12px}
-.report-table th{background:var(--surface2);color:var(--muted);font-size:10px;text-transform:uppercase;
-                 letter-spacing:.05em;padding:8px 12px;text-align:left;font-weight:600}
-.report-table td{padding:8px 12px;border-top:1px solid var(--border);vertical-align:top}
-.report-table tr:hover td{background:var(--surface2)}
-.report-fail-item{padding:10px 14px;border-radius:8px;background:rgba(248,113,113,.05);
-                  border:1px solid rgba(248,113,113,.15);margin-bottom:8px}
-.report-fail-meta{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:5px}
-.report-fail-text{font-size:12px;color:var(--muted);line-height:1.5;white-space:pre-wrap}
+.chip-gray{background:#22263a;color:#7c85a2;border:1px solid #2e3250}
+.chip-purple{background:rgba(108,99,255,.12);color:#a78bfa;border:1px solid rgba(108,99,255,.25)}
+.tag{display:inline-block;background:#22263a;border:1px solid #2e3250;border-radius:5px;padding:2px 7px;font-size:11px;color:#7c85a2;margin:2px}
+.input{background:#22263a;border:1px solid #2e3250;color:#e2e8f0;padding:7px 11px;border-radius:7px;font-size:12px;outline:none;width:100%}
+.input:focus{border-color:#6c63ff}
+.input::placeholder{color:#7c85a2}
+.select{background:#22263a;border:1px solid #2e3250;color:#e2e8f0;padding:7px 10px;border-radius:7px;font-size:12px;outline:none;cursor:pointer}
+.select:focus{border-color:#6c63ff}
+th.th{background:#22263a;color:#7c85a2;font-size:11px;text-transform:uppercase;letter-spacing:.05em;padding:10px 14px;text-align:left;font-weight:600}
+td.td{padding:9px 14px;vertical-align:middle;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pgbtn{min-width:28px;height:26px;padding:0 6px;border-radius:6px;border:1px solid #2e3250;background:transparent;color:#7c85a2;font-size:12px;cursor:pointer;transition:.15s;display:inline-flex;align-items:center;justify-content:center}
+.pgbtn:hover:not(:disabled){background:#22263a;color:#e2e8f0;border-color:#e2e8f0}
+.pgbtn.active{background:#6c63ff;border-color:#6c63ff;color:#fff;font-weight:700}
+.pgbtn:disabled{opacity:.35;cursor:not-allowed}
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.72);display:flex;align-items:center;justify-content:center;z-index:100;padding:20px}
+.modal-box{background:#1a1d27;border:1px solid #2e3250;border-radius:12px;width:100%;display:flex;flex-direction:column;overflow:hidden}
+.modal-head{padding:14px 18px;border-bottom:1px solid #2e3250;display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.modal-head h3{font-size:15px;font-weight:700}
+.form-label{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:#7c85a2;font-weight:600;margin-bottom:5px}
+.spinner{width:28px;height:28px;border-radius:50%;border:3px solid #2e3250;border-top-color:#6c63ff;animation:spin .7s linear infinite}
+.spinner.sm{width:18px;height:18px;border-width:2px}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes pulse-dot{0%,100%{opacity:1}50%{opacity:.3}}
+.pulse{animation:pulse-dot 1.3s infinite}
+.analysis-clamp{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+pre.raw-pre{font-family:'JetBrains Mono','Fira Code',monospace;font-size:11.5px;line-height:1.65;white-space:pre-wrap;word-break:break-all}
+.tl-dot-user{background:#6c63ff;color:#fff}
+.tl-dot-bot{background:#22263a;color:#00d4aa;border:1px solid #2e3250}
+/* fade transition */
+.fade-enter-active,.fade-leave-active{transition:opacity .15s}
+.fade-enter-from,.fade-leave-to{opacity:0}
 </style>
 </head>
-<body>
+<body class="overflow-hidden">
+<div id="app" v-cloak class="flex h-screen overflow-hidden">
 
-<!-- SIDEBAR -->
-<nav class="sidebar">
-  <div class="sidebar-logo">QA Chat<span>Tester</span></div>
-  <div class="nav-item active" data-page="dashboard" onclick="showPage('dashboard',this)">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
-    Dashboard
-  </div>
-  <div class="nav-item" data-page="conversations" onclick="showPage('conversations',this)">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
-    Conversaciones
-  </div>
-  <div class="nav-item" data-page="analyses" onclick="showPage('analyses',this)">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
-    Análisis
-  </div>
-  <div class="nav-item" data-page="cases" onclick="showPage('cases',this)">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-    Cases JSON
-  </div>
-  <div class="nav-item" data-page="run" onclick="showPage('run',this)">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-    Ejecutar
-  </div>
-  <div class="sidebar-footer" id="sidebarStatus">● Conectado</div>
-</nav>
+  <!-- ── SIDEBAR ─────────────────────────────────────────────────────────── -->
+  <aside style="width:220px;min-width:220px;background:#1a1d27;border-right:1px solid #2e3250" class="flex flex-col">
+    <div style="padding:16px 20px 16px;border-bottom:1px solid #2e3250" class="flex items-center gap-2">
+      <span style="color:#6c63ff;font-weight:700;font-size:15px">QA Chat<span style="color:#00d4aa">Tester</span></span>
+    </div>
+    <nav class="flex-1 py-2 overflow-y-auto">
+      <button v-for="n in NAV" :key="n.id" @click="navigate(n.id)"
+        :style="page===n.id
+          ? 'color:#6c63ff;border-left-color:#6c63ff;background:rgba(108,99,255,.07)'
+          : 'color:#7c85a2;border-left-color:transparent'"
+        style="width:100%;display:flex;align-items:center;gap:10px;padding:10px 20px;cursor:pointer;border:none;border-left:3px solid;background:transparent;font-size:13px;font-weight:500;transition:.15s;text-align:left"
+        @mouseover="e=>{ if(page!==n.id){ e.currentTarget.style.color='#e2e8f0'; e.currentTarget.style.background='#22263a'; }}"
+        @mouseleave="e=>{ if(page!==n.id){ e.currentTarget.style.color='#7c85a2'; e.currentTarget.style.background='transparent'; }}">
+        <span v-html="n.icon" style="width:16px;height:16px;flex-shrink:0;display:flex;align-items:center;justify-content:center"></span>
+        {{ n.label }}
+      </button>
+    </nav>
+    <!-- settings -->
+    <div style="border-top:1px solid #2e3250;padding:12px 16px">
+      <div class="form-label mb-1">Account ID</div>
+      <input v-model="accountId" @change="saveSettings" class="input" style="font-size:11px;padding:5px 9px" placeholder="3057"/>
+      <div class="form-label mb-1 mt-2.5">API URL</div>
+      <input v-model="apiBase" @change="saveSettings" class="input" style="font-size:11px;padding:5px 9px" placeholder="http://localhost:8000/v1"/>
+    </div>
+  </aside>
 
-<!-- MAIN -->
-<div class="main">
-  <div class="topbar">
-    <h1 id="pageTitle">Dashboard</h1>
-    <div>
-      <span class="status-dot" id="globalDot"></span>
-      <span id="globalStatus" style="font-size:12px;color:var(--muted)">Listo</span>
+  <!-- ── MAIN ───────────────────────────────────────────────────────────── -->
+  <div class="flex-1 flex flex-col min-w-0 overflow-hidden">
+
+    <!-- topbar -->
+    <header style="background:#1a1d27;border-bottom:1px solid #2e3250;padding:14px 24px" class="flex items-center justify-between flex-shrink-0">
+      <h1 style="font-size:16px;font-weight:600">{{ PAGE_TITLES[page] }}</h1>
+      <div class="flex items-center gap-3">
+        <transition name="fade">
+          <div v-if="toast" :class="['chip', toast.type==='success'?'chip-green':toast.type==='error'?'chip-red':'chip-gray']" style="font-size:12px;padding:4px 12px">
+            {{ toast.msg }}
+          </div>
+        </transition>
+        <span style="font-size:12px;color:#7c85a2">
+          <span style="width:8px;height:8px;border-radius:50%;background:#4ade80;display:inline-block;margin-right:5px"></span>Listo
+        </span>
+      </div>
+    </header>
+
+    <!-- content -->
+    <main class="flex-1 overflow-y-auto" style="padding:24px">
+
+      <!-- ═══════════ DASHBOARD ═══════════ -->
+      <template v-if="page==='dashboard'">
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px">
+          <div v-for="s in STAT_CARDS" :key="s.key" style="background:#1a1d27;border:1px solid #2e3250;border-radius:10px;padding:16px">
+            <div style="color:#7c85a2;font-size:11px;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">{{ s.label }}</div>
+            <div :style="`font-size:28px;font-weight:700;color:${s.color}`">{{ stats[s.key] ?? '–' }}</div>
+          </div>
+        </div>
+        <div style="background:#1a1d27;border:1px solid #2e3250;border-radius:10px;overflow:hidden">
+          <div style="padding:13px 18px;border-bottom:1px solid #2e3250;display:flex;align-items:center;justify-content:space-between">
+            <span style="font-weight:600">Últimas conversaciones</span>
+            <button @click="loadDashboard" class="btn btn-ghost" style="font-size:11px;padding:4px 10px">↻ Actualizar</button>
+          </div>
+          <div v-if="loading.dashboard" style="padding:40px;text-align:center"><div class="spinner" style="margin:0 auto"></div></div>
+          <div v-else-if="!recentConvs.length" style="padding:40px;text-align:center;color:#7c85a2">Sin conversaciones</div>
+          <div v-else class="overflow-x-auto">
+            <table style="width:100%;border-collapse:collapse">
+              <thead><tr>
+                <th class="th">Session</th><th class="th">Grupo</th><th class="th">Usuario</th>
+                <th class="th">Msjs</th><th class="th">Insight</th><th class="th">Último</th>
+              </tr></thead>
+              <tbody>
+                <tr v-for="r in recentConvs.slice(0,25)" :key="r.session_id"
+                  @click="openConvDetail(r.session_id)"
+                  style="border-top:1px solid #2e3250;cursor:pointer"
+                  @mouseover="e=>e.currentTarget.style.background='#22263a'"
+                  @mouseleave="e=>e.currentTarget.style.background='transparent'">
+                  <td class="td" style="font-family:monospace;font-size:11px">{{ (r.session_id||'').slice(0,16) }}…</td>
+                  <td class="td">{{ r.scenario_group_id || '–' }}</td>
+                  <td class="td">{{ r.user_id || '–' }}</td>
+                  <td class="td"><span class="chip chip-blue">{{ r.message_count }}</span></td>
+                  <td class="td">
+                    <span v-if="r.insight_complete===true" class="chip chip-green">✓</span>
+                    <span v-else-if="r.insight_complete===false&&r.insight_summary" class="chip chip-gray">pendiente</span>
+                    <span v-else style="color:#7c85a2">–</span>
+                  </td>
+                  <td class="td" style="color:#7c85a2;font-size:11px">{{ fmtDate(r.last_message_at) }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </template>
+
+      <!-- ═══════════ CONVERSATIONS ═══════════ -->
+      <template v-else-if="page==='conversations'">
+
+        <!-- DETAIL -->
+        <template v-if="currentConvId">
+          <button @click="backToConvList" class="btn btn-ghost" style="font-size:12px;margin-bottom:14px">← Volver</button>
+          <div v-if="loading.convDetail" style="padding:48px;text-align:center"><div class="spinner" style="margin:0 auto"></div></div>
+          <div v-else-if="convDetail" style="background:#1a1d27;border:1px solid #2e3250;border-radius:10px;overflow:hidden;display:flex;flex-direction:column" :style="`height:calc(100vh - 148px)`">
+            <!-- header -->
+            <div style="padding:12px 18px;border-bottom:1px solid #2e3250;display:flex;flex-wrap:wrap;align-items:center;gap:8px;flex-shrink:0">
+              <span style="font-family:monospace;font-size:11px;color:#7c85a2">{{ currentConvId }}</span>
+              <span v-if="convDetail.messages[0]?.scenario_group_id" class="chip chip-blue">{{ convDetail.messages[0].scenario_group_id }}</span>
+              <span v-if="convDetail.messages[0]?.scenario" class="tag">{{ convDetail.messages[0].scenario }}</span>
+              <span v-if="convDetail.messages[0]?.user_id" class="tag">👤 {{ convDetail.messages[0].user_id }}</span>
+              <span v-if="convDetail.messages[0]?.run_id" class="tag" style="font-family:monospace">run: {{ convDetail.messages[0].run_id.slice(0,12) }}…</span>
+              <span class="chip chip-blue" style="margin-left:auto">{{ convDetail.messages.length }} msjs</span>
+              <button @click="copyConversation" class="btn btn-ghost" style="font-size:11px;padding:4px 10px">Copiar</button>
+            </div>
+            <!-- messages -->
+            <div class="flex-1 overflow-y-auto" style="padding:20px 24px;display:flex;flex-direction:column;gap:0" ref="msgScroll">
+              <!-- case panel -->
+              <div v-if="convDetail.case" style="border-radius:10px;background:rgba(99,102,241,.05);border:1px solid rgba(99,102,241,.15);overflow:hidden;margin-bottom:12px;flex-shrink:0">
+                <div style="padding:8px 14px;display:flex;align-items:center;gap:8px;background:rgba(99,102,241,.07);border-bottom:1px solid rgba(99,102,241,.1)">
+                  <span style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#818cf8">Caso de prueba</span>
+                  <span v-if="convDetail.case.payload?.user_name" style="font-size:12px;font-weight:600">{{ convDetail.case.payload.user_name }}</span>
+                  <span v-for="c in parseCampaigns(convDetail.case.payload?.campaigns)" :key="c.campaign_id||c.campaign_name"
+                    style="font-size:10px;padding:2px 7px;border-radius:12px;background:rgba(0,212,170,.1);border:1px solid rgba(0,212,170,.25);color:#00d4aa">
+                    {{ c.campaign_name || c.campaign_id }}
+                  </span>
+                </div>
+                <div style="padding:10px 14px;font-size:12px">
+                  <div v-if="convDetail.case.payload?.prompt" style="display:flex;gap:10px;margin-bottom:6px">
+                    <span style="font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:#7c85a2;min-width:96px;flex-shrink:0">Escenario</span>
+                    <span style="white-space:pre-wrap;line-height:1.55">{{ convDetail.case.payload.prompt }}</span>
+                  </div>
+                  <div v-if="convDetail.case.payload?.analysisPrompt" style="display:flex;gap:10px">
+                    <span style="font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:#7c85a2;min-width:96px;flex-shrink:0">Criterio</span>
+                    <span style="color:#7c85a2">{{ convDetail.case.payload.analysisPrompt }}</span>
+                  </div>
+                </div>
+              </div>
+              <!-- timeline -->
+              <div v-for="(m, idx) in convDetail.messages" :key="m._id||idx"
+                style="position:relative;padding-left:16px;margin-bottom:4px;margin-left:32px">
+                <!-- connector line -->
+                <div v-if="idx < convDetail.messages.length-1" style="position:absolute;left:-6px;top:28px;bottom:0;width:2px;background:#2e3250"></div>
+                <!-- turn number -->
+                <button @click="openRaw(idx+1, m.raw_response)"
+                  style="position:absolute;left:6px;top:10px;width:18px;height:18px;border-radius:50%;background:#22263a;border:1px solid #2e3250;color:#7c85a2;font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:.15s"
+                  @mouseover="e=>Object.assign(e.currentTarget.style,{background:'#6c63ff',borderColor:'#6c63ff',color:'#fff'})"
+                  @mouseleave="e=>Object.assign(e.currentTarget.style,{background:'#22263a',borderColor:'#2e3250',color:'#7c85a2'})">
+                  {{ idx+1 }}
+                </button>
+                <!-- campaign banner -->
+                <div v-if="parseCampaigns(m.campaigns).length" style="display:flex;align-items:center;gap:6px;padding:5px 10px;margin-bottom:4px;background:rgba(0,212,170,.07);border:1px solid rgba(0,212,170,.25);border-radius:6px;font-size:11px;color:#00d4aa;font-weight:600">
+                  [Campaña] {{ parseCampaigns(m.campaigns).map(c=>c.campaign_name||c.campaign_id).join(', ') }}
+                </div>
+                <!-- user -->
+                <div v-if="m.message" style="display:flex;flex-direction:column;gap:3px;padding:10px 0 4px">
+                  <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#6c63ff;display:flex;align-items:center;gap:6px">
+                    Usuario <span style="font-weight:400;font-size:10px;color:#7c85a2;text-transform:none;letter-spacing:0">{{ fmtDate(m.created_at) }}</span>
+                  </div>
+                  <div style="font-size:13px;line-height:1.6;white-space:pre-wrap;word-break:break-word;padding:8px 12px;background:rgba(108,99,255,.12);border:1px solid rgba(108,99,255,.25);border-radius:8px;margin-top:2px">{{ m.message }}</div>
+                </div>
+                <!-- bot -->
+                <div v-if="m.response" style="display:flex;flex-direction:column;gap:3px;padding:4px 0 8px">
+                  <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#00d4aa">Bot</div>
+                  <div style="font-size:13px;line-height:1.6;white-space:pre-wrap;word-break:break-word;padding:8px 12px;background:#22263a;border:1px solid #2e3250;border-radius:8px;margin-top:2px">{{ m.response }}</div>
+                </div>
+              </div>
+            </div>
+            <!-- insight -->
+            <div v-if="convDetail.insight"
+              :style="`border-left:3px solid ${convDetail.insight.complete===true?'#4ade80':convDetail.insight.complete===false?'#f87171':'#fbbf24'};background:${convDetail.insight.complete===true?'rgba(74,222,128,.05)':convDetail.insight.complete===false?'rgba(248,113,113,.05)':'rgba(251,191,36,.05)'};padding:14px 16px;border-top:1px solid #2e3250;font-size:13px;line-height:1.6;flex-shrink:0`">
+              <div :style="`font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;margin-bottom:8px;color:${convDetail.insight.complete===true?'#4ade80':convDetail.insight.complete===false?'#f87171':'#fbbf24'}`">
+                {{ convDetail.insight.complete===true ? '✓ Objetivo cumplido' : convDetail.insight.complete===false ? '✗ Objetivo no cumplido' : '⏳ Sin evaluar' }}
+              </div>
+              <div style="white-space:pre-wrap">{{ convDetail.insight.analysis || '(sin texto)' }}</div>
+            </div>
+          </div>
+        </template>
+
+        <!-- LIST -->
+        <template v-else>
+          <div style="background:#1a1d27;border:1px solid #2e3250;border-radius:10px;overflow:hidden">
+            <div style="padding:13px 18px;border-bottom:1px solid #2e3250;display:flex;align-items:center;gap:10px">
+              <span style="font-weight:600">Conversaciones</span>
+              <span style="color:#7c85a2;font-size:12px">{{ convs.length }} total · <span style="color:#00d4aa">{{ convs.filter(r=>r.insight_summary!=null||r.insight_complete!=null).length }} analizadas</span> · <span style="color:#4ade80">{{ convs.filter(r=>r.insight_complete===true).length }} objetivo cumplido</span></span>
+              <div style="margin-left:auto;display:flex;gap:8px">
+                <button @click="loadConvs" class="btn btn-ghost" style="font-size:11px;padding:4px 10px">↻ Actualizar</button>
+                <button @click="downloadExport" class="btn btn-success" style="font-size:11px;padding:4px 10px">⬇ Exportar Excel</button>
+              </div>
+            </div>
+            <!-- filters -->
+            <div style="padding:10px 14px;border-bottom:1px solid #2e3250;display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+              <select v-model="convFilter.field" class="select" style="font-size:11px;padding:5px 8px">
+                <option value="session_id">Session ID</option><option value="run_id">Run ID</option>
+                <option value="user_id">Usuario</option><option value="scenario">Escenario</option>
+                <option value="scenario_group_id">Grupo</option>
+              </select>
+              <input v-model="convFilter.query" @input="convPage=1" placeholder="Buscar…" class="input" style="flex:1;min-width:160px;font-size:11px;padding:5px 9px"/>
+              <button v-if="convFilter.query" @click="convFilter.query='';convPage=1" class="btn btn-ghost" style="font-size:11px;padding:4px 8px">✕</button>
+              <div style="display:flex;gap:5px;align-items:center">
+                <span style="font-size:11px;color:#7c85a2;font-weight:600">Estado:</span>
+                <button v-for="f in [{v:'all',l:'Todas'},{v:'done',l:'Analizadas'},{v:'pend',l:'En curso'}]" :key="f.v"
+                  @click="convFilter.status=f.v;convPage=1"
+                  :class="['btn',convFilter.status===f.v?'btn-primary':'btn-ghost']" style="font-size:11px;padding:4px 10px">{{ f.l }}</button>
+              </div>
+              <div style="display:flex;gap:5px;align-items:center">
+                <span style="font-size:11px;color:#7c85a2;font-weight:600">Objetivo:</span>
+                <button v-for="f in [{v:'all',l:'Todos'},{v:'ok',l:'Cumplido'},{v:'fail',l:'No cumplido'}]" :key="f.v"
+                  @click="convFilter.objective=f.v;convPage=1"
+                  :class="['btn',convFilter.objective===f.v?'btn-primary':'btn-ghost']" style="font-size:11px;padding:4px 10px">{{ f.l }}</button>
+              </div>
+            </div>
+            <!-- table -->
+            <div v-if="loading.convs" style="padding:40px;text-align:center"><div class="spinner" style="margin:0 auto"></div></div>
+            <div v-else-if="!filteredConvs.length" style="padding:40px;text-align:center;color:#7c85a2">Sin resultados</div>
+            <div v-else class="overflow-x-auto">
+              <table style="width:100%;border-collapse:collapse">
+                <thead><tr>
+                  <th class="th">Session ID</th><th class="th">Run ID</th><th class="th">Grupo</th>
+                  <th class="th">Usuario</th><th class="th">Msjs</th><th class="th">Estado</th>
+                  <th class="th">Objetivo</th><th class="th">Inicio</th>
+                </tr></thead>
+                <tbody>
+                  <tr v-for="r in pagedConvs" :key="r.session_id"
+                    @click="openConvDetail(r.session_id)"
+                    style="border-top:1px solid #2e3250;cursor:pointer"
+                    @mouseover="e=>e.currentTarget.style.background='#22263a'"
+                    @mouseleave="e=>e.currentTarget.style.background='transparent'">
+                    <td class="td" style="font-family:monospace;font-size:11px" :title="r.session_id">{{ (r.session_id||'').slice(0,18) }}…</td>
+                    <td class="td" style="font-family:monospace;font-size:11px" :title="r.run_id||''">{{ r.run_id ? r.run_id.slice(0,12)+'…' : '–' }}</td>
+                    <td class="td">{{ r.scenario_group_id || '–' }}</td>
+                    <td class="td">{{ r.user_id || '–' }}</td>
+                    <td class="td"><b>{{ r.message_count }}</b></td>
+                    <td class="td">
+                      <span v-if="r.insight_summary!=null||r.insight_complete!=null" class="chip chip-blue">✓ Analizada</span>
+                      <span v-else class="chip chip-orange">⏳ En curso</span>
+                    </td>
+                    <td class="td">
+                      <span v-if="r.insight_complete===true" class="chip chip-green">✓ Cumplido</span>
+                      <span v-else-if="r.insight_complete===false" class="chip chip-red">✗ No cumplido</span>
+                      <span v-else style="color:#7c85a2">–</span>
+                    </td>
+                    <td class="td" style="color:#7c85a2;font-size:11px">{{ fmtDate(r.started_at) }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <!-- pagination -->
+            <div style="padding:10px 14px;border-top:1px solid #2e3250;display:flex;align-items:center;justify-content:space-between">
+              <span style="font-size:12px;color:#7c85a2">{{ convPageInfo }}</span>
+              <div style="display:flex;gap:4px">
+                <button @click="convPage=1" :disabled="convPage===1" class="pgbtn">«</button>
+                <button @click="convPage--" :disabled="convPage===1" class="pgbtn">‹</button>
+                <button v-for="p in convPageRange" :key="p" @click="convPage=p" :class="['pgbtn',p===convPage&&'active']">{{ p }}</button>
+                <button @click="convPage++" :disabled="convPage===convTotalPages" class="pgbtn">›</button>
+                <button @click="convPage=convTotalPages" :disabled="convPage===convTotalPages" class="pgbtn">»</button>
+              </div>
+            </div>
+          </div>
+        </template>
+      </template>
+
+      <!-- ═══════════ ANALYSES ═══════════ -->
+      <template v-else-if="page==='analyses'">
+        <div style="background:#1a1d27;border:1px solid #2e3250;border-radius:10px;overflow:hidden">
+          <div style="padding:13px 18px;border-bottom:1px solid #2e3250;display:flex;align-items:center;gap:10px">
+            <span style="font-weight:600">Análisis de conversaciones</span>
+            <div style="margin-left:auto;display:flex;gap:8px">
+              <button @click="loadAnalyses" class="btn btn-ghost" style="font-size:11px;padding:4px 10px">↻ Actualizar</button>
+              <button @click="showReport=true" class="btn btn-primary" style="font-size:12px">Reporte ejecutivo</button>
+            </div>
+          </div>
+          <div style="padding:18px">
+            <!-- stats -->
+            <div v-if="analyses.length" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;margin-bottom:18px">
+              <div v-for="s in anStatCards" :key="s.label" style="background:#22263a;border:1px solid #2e3250;border-radius:10px;padding:13px 16px">
+                <div style="font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#7c85a2;font-weight:600;margin-bottom:4px">{{ s.label }}</div>
+                <div :style="`font-size:24px;font-weight:700;color:${s.color}`">{{ s.value }}</div>
+                <div v-if="s.sub" style="font-size:11px;color:#7c85a2">{{ s.sub }}</div>
+              </div>
+            </div>
+            <!-- charts -->
+            <div v-if="analyses.length" style="display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap">
+              <div style="background:#22263a;border:1px solid #2e3250;border-radius:10px;padding:14px;flex:1;min-width:200px;max-width:280px">
+                <div style="font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#7c85a2;margin-bottom:10px">Distribución</div>
+                <div style="position:relative;height:180px"><canvas id="chart-donut"></canvas></div>
+              </div>
+              <div v-if="anGroups.length" style="background:#22263a;border:1px solid #2e3250;border-radius:10px;padding:14px;flex:2;min-width:260px;overflow-x:auto">
+                <div style="font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#7c85a2;margin-bottom:10px">Por grupo</div>
+                <div :style="`position:relative;height:180px;min-width:${Math.max(240,anGroups.length*68)}px`"><canvas id="chart-bars"></canvas></div>
+              </div>
+            </div>
+            <!-- filter bar -->
+            <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:12px 0 10px;border-top:1px solid #2e3250;margin-bottom:4px">
+              <div style="display:flex;gap:5px;flex-wrap:wrap">
+                <button v-for="f in anStatusFilters" :key="f.k"
+                  @click="anFilter.status=f.k;anPage=1"
+                  :class="['btn', anFilter.status===f.k ? (f.k==='ok'?'btn-success':f.k==='fail'?'btn-danger':'btn-primary') : 'btn-ghost']"
+                  style="font-size:11px;padding:4px 11px;border-radius:20px">{{ f.l }}</button>
+              </div>
+              <select v-if="anGroupNames.length" v-model="anFilter.group" @change="anPage=1" class="select" style="font-size:11px;padding:5px 8px">
+                <option value="">Todos los grupos</option>
+                <option v-for="g in anGroupNames" :key="g" :value="g">{{ g }}</option>
+              </select>
+              <input v-model="anFilter.search" @input="anPage=1" placeholder="Buscar en análisis…" class="input" style="flex:1;min-width:160px;font-size:11px;padding:5px 9px"/>
+              <button v-if="anFilter.search" @click="anFilter.search='';anPage=1" class="btn btn-ghost" style="font-size:11px;padding:4px 8px">✕</button>
+            </div>
+            <!-- list -->
+            <div v-if="loading.analyses" style="padding:40px;text-align:center"><div class="spinner" style="margin:0 auto"></div></div>
+            <div v-else-if="!filteredAnalyses.length" style="padding:40px;text-align:center;color:#7c85a2">Sin resultados</div>
+            <template v-else>
+              <div style="font-size:12px;color:#7c85a2;margin-bottom:10px">{{ filteredAnalyses.length }} resultado{{ filteredAnalyses.length!==1?'s':'' }}</div>
+              <div v-for="a in pagedAnalyses" :key="a._id"
+                :style="`background:#1a1d27;border:1px solid #2e3250;border-left:3px solid ${a.complete===true?'#4ade80':a.complete===false?'#f87171':'#fbbf24'};border-radius:10px;padding:15px 17px;margin-bottom:10px;transition:.15s`"
+                @mouseover="e=>e.currentTarget.style.background='#22263a'"
+                @mouseleave="e=>e.currentTarget.style.background='#1a1d27'">
+                <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-bottom:8px">
+                  <span style="font-family:monospace;font-size:11px;color:#7c85a2" :title="a.session_id">{{ (a.session_id||'–').slice(0,20) }}…</span>
+                  <span v-if="a.scenario_group_id" class="chip chip-blue">{{ a.scenario_group_id }}</span>
+                  <span v-if="a.scenario" class="tag" :title="a.scenario">{{ a.scenario.length>44 ? a.scenario.slice(0,42)+'…' : a.scenario }}</span>
+                  <span v-if="a.user_id" class="tag">👤 {{ a.user_id }}</span>
+                  <span v-if="a.message_count" class="tag">💬 {{ a.message_count }}</span>
+                  <span style="margin-left:auto;font-size:11px;color:#7c85a2">{{ fmtDate(a.created_at) }}</span>
+                </div>
+                <span :class="['chip', a.complete===true?'chip-green':a.complete===false?'chip-red':'chip-orange']">
+                  {{ a.complete===true?'✓ Objetivo cumplido':a.complete===false?'✗ Objetivo no cumplido':'⏳ Sin evaluar' }}
+                </span>
+                <div :class="['text-sm leading-relaxed mt-2.5', a._expanded?'':'analysis-clamp']" style="color:#e2e8f0;white-space:pre-wrap;font-size:13px;line-height:1.6;margin-top:10px">
+                  {{ a.analysis || '(sin análisis)' }}
+                </div>
+                <div style="display:flex;gap:8px;align-items:center;margin-top:10px;padding-top:8px;border-top:1px solid #2e3250">
+                  <button @click="a._expanded=!a._expanded" class="btn btn-ghost" style="font-size:11px;padding:3px 9px">{{ a._expanded?'▲ Colapsar':'▼ Expandir' }}</button>
+                  <button @click="openConvDetail(a.session_id)" class="btn btn-primary" style="font-size:11px;padding:3px 11px">↗ Ver conversación</button>
+                  <span style="margin-left:auto;font-family:monospace;font-size:10px;color:#7c85a2" :title="a.run_id||''">run: {{ (a.run_id||'–').slice(0,12) }}…</span>
+                </div>
+              </div>
+              <!-- pagination -->
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-top:14px">
+                <span style="font-size:12px;color:#7c85a2">{{ anPageInfo }}</span>
+                <div style="display:flex;gap:4px">
+                  <button @click="anPage--" :disabled="anPage===1" class="pgbtn">‹</button>
+                  <button v-for="p in anPageRange" :key="p" @click="anPage=p" :class="['pgbtn',p===anPage&&'active']">{{ p }}</button>
+                  <button @click="anPage++" :disabled="anPage===anTotalPages" class="pgbtn">›</button>
+                </div>
+              </div>
+            </template>
+          </div>
+        </div>
+      </template>
+
+      <!-- ═══════════ SUITES ═══════════ -->
+      <template v-else-if="page==='suites'">
+        <!-- CASES LIST within suite -->
+        <template v-if="currentSuite">
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;flex-wrap:wrap">
+            <button @click="currentSuite=null;suiteCases=[]" class="btn btn-ghost" style="font-size:12px">← Suites</button>
+            <div>
+              <div style="font-weight:600;font-size:15px">{{ currentSuite.title }}</div>
+              <div v-if="currentSuite.description" style="font-size:12px;color:#7c85a2">{{ currentSuite.description }}</div>
+            </div>
+            <div style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap">
+              <button @click="openCaseModal(null)" class="btn btn-primary" style="font-size:12px">+ Nuevo caso</button>
+              <label class="btn btn-ghost" style="font-size:12px;cursor:pointer">
+                ↑ Subir JSON
+                <input type="file" accept=".json" class="hidden" @change="onUploadCases($event)"/>
+              </label>
+              <button @click="triggerSuiteRun(currentSuite._id)" class="btn btn-success" style="font-size:12px">▶ Ejecutar suite</button>
+            </div>
+          </div>
+          <div style="background:#1a1d27;border:1px solid #2e3250;border-radius:10px;overflow:hidden">
+            <div style="padding:12px 18px;border-bottom:1px solid #2e3250;display:flex;align-items:center;gap:8px">
+              <span style="font-weight:600">Casos de prueba</span>
+              <span style="font-size:12px;color:#7c85a2">{{ suiteCases.length }} casos</span>
+              <button @click="loadCases(currentSuite._id)" class="btn btn-ghost" style="font-size:11px;padding:4px 8px;margin-left:auto">↻</button>
+            </div>
+            <div v-if="loading.cases" style="padding:40px;text-align:center"><div class="spinner" style="margin:0 auto"></div></div>
+            <div v-else-if="!suiteCases.length" style="padding:48px;text-align:center;color:#7c85a2">
+              <div style="font-size:32px;margin-bottom:12px">📋</div>
+              <div>Sin casos. Crea uno manualmente o sube un archivo JSON.</div>
+            </div>
+            <div v-else>
+              <div v-for="c in suiteCases" :key="c._id"
+                style="padding:13px 18px;border-top:1px solid #2e3250;display:flex;align-items:flex-start;gap:12px"
+                @mouseover="e=>{ e.currentTarget.style.background='#22263a'; e.currentTarget.querySelector('.case-actions').style.opacity='1'; }"
+                @mouseleave="e=>{ e.currentTarget.style.background='transparent'; e.currentTarget.querySelector('.case-actions').style.opacity='0'; }">
+                <div style="flex:1;min-width:0">
+                  <div style="font-weight:600;font-size:13px;margin-bottom:2px">{{ c.title }}</div>
+                  <div v-if="c.description" style="font-size:11px;color:#7c85a2;margin-bottom:4px">{{ c.description }}</div>
+                  <div style="font-family:monospace;font-size:10px;color:#7c85a2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ JSON.stringify(c.payload||{}).slice(0,140) }}…</div>
+                </div>
+                <div class="case-actions" style="display:flex;gap:6px;flex-shrink:0;opacity:0;transition:.15s">
+                  <button @click="triggerCaseRun(c._id)" class="btn btn-success" style="font-size:11px;padding:4px 9px">▶</button>
+                  <button @click="openCaseModal(c)" class="btn btn-ghost" style="font-size:11px;padding:4px 9px">✎</button>
+                  <button @click="confirmDeleteCase(c)" class="btn btn-danger" style="font-size:11px;padding:4px 9px">✕</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </template>
+
+        <!-- SUITES LIST -->
+        <template v-else>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+            <h2 style="font-size:16px;font-weight:700">Test Suites</h2>
+            <button @click="openSuiteModal(null)" class="btn btn-primary">+ Nueva suite</button>
+          </div>
+          <div v-if="loading.suites" style="padding:48px;text-align:center"><div class="spinner" style="margin:0 auto"></div></div>
+          <div v-else-if="!suites.length" style="padding:60px;text-align:center;color:#7c85a2">
+            <div style="font-size:40px;margin-bottom:16px">📁</div>
+            <div style="margin-bottom:12px">No hay suites. Crea la primera.</div>
+            <button @click="openSuiteModal(null)" class="btn btn-primary">Crear suite</button>
+          </div>
+          <div v-else style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px">
+            <div v-for="s in suites" :key="s._id"
+              style="background:#1a1d27;border:1px solid #2e3250;border-radius:10px;padding:16px;display:flex;flex-direction:column;gap:12px;transition:.15s"
+              @mouseover="e=>e.currentTarget.style.borderColor='rgba(108,99,255,.4)'"
+              @mouseleave="e=>e.currentTarget.style.borderColor='#2e3250'">
+              <div style="cursor:pointer" @click="openSuiteDetail(s)">
+                <div style="font-weight:600;font-size:14px;margin-bottom:4px">{{ s.title }}</div>
+                <div v-if="s.description" style="font-size:12px;color:#7c85a2;line-height:1.5">{{ s.description }}</div>
+              </div>
+              <div style="display:flex;align-items:center;gap:8px">
+                <span class="chip chip-blue">{{ s.case_count ?? 0 }} casos</span>
+                <span style="font-size:11px;color:#7c85a2;margin-left:auto">{{ fmtDate(s.created_at) }}</span>
+              </div>
+              <div style="display:flex;gap:6px;padding-top:8px;border-top:1px solid #2e3250">
+                <button @click="openSuiteDetail(s)" class="btn btn-ghost" style="font-size:11px;flex:1">Ver casos →</button>
+                <button @click="triggerSuiteRun(s._id)" class="btn btn-success" style="font-size:11px;padding:4px 10px">▶</button>
+                <button @click="openSuiteModal(s)" class="btn btn-ghost" style="font-size:11px;padding:4px 9px">✎</button>
+                <button @click="confirmDeleteSuite(s)" class="btn btn-danger" style="font-size:11px;padding:4px 9px">✕</button>
+              </div>
+            </div>
+          </div>
+        </template>
+      </template>
+
+      <!-- ═══════════ RUNS ═══════════ -->
+      <template v-else-if="page==='runs'">
+        <div style="background:#1a1d27;border:1px solid #2e3250;border-radius:10px;overflow:hidden">
+          <div style="padding:13px 18px;border-bottom:1px solid #2e3250;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            <span style="font-weight:600">Ejecuciones</span>
+            <span v-if="activeRuns>0" class="chip chip-orange pulse">● {{ activeRuns }} corriendo</span>
+            <div style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+              <select v-model="runsFilter.suite_id" @change="loadRuns" class="select" style="font-size:11px;padding:5px 8px">
+                <option value="">Todas las suites</option>
+                <option v-for="s in suites" :key="s._id" :value="s._id">{{ s.title }}</option>
+              </select>
+              <button @click="loadRuns" class="btn btn-ghost" style="font-size:11px;padding:4px 10px">↻ Actualizar</button>
+            </div>
+          </div>
+          <div v-if="loading.runs" style="padding:40px;text-align:center"><div class="spinner" style="margin:0 auto"></div></div>
+          <div v-else-if="!runs.length" style="padding:48px;text-align:center;color:#7c85a2">
+            <div style="font-size:32px;margin-bottom:12px">▶</div>
+            Sin ejecuciones. Ejecuta un suite desde Test Suites.
+          </div>
+          <div v-else>
+            <div v-for="r in runs" :key="r.run_id"
+              @click="openRunDetail(r)"
+              style="padding:13px 18px;border-top:1px solid #2e3250;display:flex;align-items:center;gap:12px;cursor:pointer;transition:.15s"
+              @mouseover="e=>e.currentTarget.style.background='#22263a'"
+              @mouseleave="e=>e.currentTarget.style.background='transparent'">
+              <div :class="['pulse-dot', r.status]" :style="`width:8px;height:8px;border-radius:50%;flex-shrink:0;background:${r.status==='completed'?'#4ade80':r.status==='failed'?'#f87171':r.status==='running'?'#6c63ff':'#7c85a2'}`"></div>
+              <div style="flex:1;min-width:0">
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;flex-wrap:wrap">
+                  <span style="font-family:monospace;font-size:11px;color:#7c85a2">{{ (r.run_id||'').slice(0,16) }}…</span>
+                  <span :class="['chip', r.status==='completed'?'chip-green':r.status==='failed'?'chip-red':r.status==='running'?'chip-purple':'chip-gray']">{{ {pending:'Pendiente',running:'Corriendo',completed:'Completado',failed:'Fallido'}[r.status]||r.status }}</span>
+                  <span class="chip chip-gray" style="font-size:10px">{{ r.type }}</span>
+                  <span style="font-size:11px;color:#7c85a2">{{ r.model }}</span>
+                </div>
+                <div style="display:flex;align-items:center;gap:8px">
+                  <div style="flex:1;background:#22263a;border-radius:99px;height:5px;overflow:hidden">
+                    <div :style="`width:${r.total_cases?Math.round(r.completed_cases/r.total_cases*100):0}%;height:100%;border-radius:99px;background:${r.status==='completed'?'#4ade80':r.status==='failed'?'#f87171':'#6c63ff'};transition:.4s`"></div>
+                  </div>
+                  <span style="font-size:11px;color:#7c85a2;flex-shrink:0">{{ r.completed_cases }}/{{ r.total_cases }}</span>
+                  <span v-if="r.failed_cases>0" style="font-size:11px;color:#f87171">{{ r.failed_cases }} fallidos</span>
+                </div>
+              </div>
+              <div style="text-align:right;flex-shrink:0">
+                <div style="font-size:11px;color:#7c85a2">{{ fmtDate(r.created_at) }}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </template>
+
+    </main>
+  </div><!-- /main -->
+
+  <!-- ── MODALS ──────────────────────────────────────────────────────────── -->
+
+  <!-- Raw response -->
+  <div v-if="rawModal.show" class="modal-overlay" @click.self="rawModal.show=false">
+    <div class="modal-box" style="max-width:760px;max-height:88vh">
+      <div class="modal-head">
+        <h3>{{ rawModal.title }}</h3>
+        <button @click="rawModal.show=false" class="btn btn-ghost" style="padding:4px 10px">✕</button>
+      </div>
+      <div style="overflow-y:auto;padding:16px;flex:1">
+        <pre class="raw-pre" style="background:#0d1117;padding:14px;border-radius:8px;color:#e6edf3;margin:0">{{ rawModal.content }}</pre>
+      </div>
     </div>
   </div>
-  <div class="content" id="content">
-    <!-- dynamic content here -->
-  </div>
-</div>
 
-<!-- CONFIRM MODAL -->
-<div class="confirm-overlay hidden" id="confirmModal">
-  <div class="confirm-box">
-    <h3 id="confirmTitle">¿Confirmar acción?</h3>
-    <p id="confirmMsg"></p>
-    <div class="actions">
-      <button class="btn btn-ghost" onclick="closeConfirm()">Cancelar</button>
-      <button class="btn btn-danger" id="confirmOkBtn">Confirmar</button>
+  <!-- Suite create/edit -->
+  <div v-if="suiteModal.show" class="modal-overlay" @click.self="suiteModal.show=false">
+    <div class="modal-box" style="max-width:440px">
+      <div class="modal-head">
+        <h3>{{ suiteModal.editing ? 'Editar suite' : 'Nueva suite' }}</h3>
+        <button @click="suiteModal.show=false" class="btn btn-ghost" style="padding:4px 10px">✕</button>
+      </div>
+      <div style="padding:20px;display:flex;flex-direction:column;gap:16px">
+        <div>
+          <label class="form-label">Título *</label>
+          <input v-model="suiteForm.title" class="input" placeholder="Flujo de pagos" @keyup.enter="saveSuite"/>
+        </div>
+        <div>
+          <label class="form-label">Descripción</label>
+          <textarea v-model="suiteForm.description" class="input" style="height:80px;resize:none" placeholder="Descripción opcional…"></textarea>
+        </div>
+      </div>
+      <div style="padding:0 20px 20px;display:flex;gap:8px;justify-content:flex-end">
+        <button @click="suiteModal.show=false" class="btn btn-ghost">Cancelar</button>
+        <button @click="saveSuite" :disabled="!suiteForm.title.trim()" class="btn btn-primary">{{ suiteModal.editing ? 'Guardar' : 'Crear' }}</button>
+      </div>
     </div>
   </div>
-</div>
 
-<div class="raw-overlay hidden" id="rawModal">
-  <div class="raw-box">
-    <div class="raw-box-header">
-      <h3 id="rawModalTitle">raw_response</h3>
-      <button class="btn btn-ghost" style="padding:4px 10px" onclick="closeRawModal()">✕ Cerrar</button>
-    </div>
-    <div class="raw-body">
-      <pre id="rawModalContent"></pre>
+  <!-- Case create/edit -->
+  <div v-if="caseModal.show" class="modal-overlay" @click.self="caseModal.show=false">
+    <div class="modal-box" style="max-width:560px;max-height:90vh">
+      <div class="modal-head">
+        <h3>{{ caseModal.editing ? 'Editar caso' : 'Nuevo caso' }}</h3>
+        <button @click="caseModal.show=false" class="btn btn-ghost" style="padding:4px 10px">✕</button>
+      </div>
+      <div style="padding:20px;display:flex;flex-direction:column;gap:14px;overflow-y:auto;flex:1">
+        <div>
+          <label class="form-label">Título *</label>
+          <input v-model="caseForm.title" class="input" placeholder="Pago exitoso con tarjeta"/>
+        </div>
+        <div>
+          <label class="form-label">Descripción</label>
+          <input v-model="caseForm.description" class="input" placeholder="Descripción opcional"/>
+        </div>
+        <div>
+          <label class="form-label">Payload JSON *</label>
+          <textarea v-model="caseForm.payload" class="input" style="height:200px;resize:vertical;font-family:monospace;font-size:12px" placeholder='{"user_id":"123","prompt":"…"}'></textarea>
+          <p v-if="caseForm.error" style="color:#f87171;font-size:11px;margin-top:4px">{{ caseForm.error }}</p>
+        </div>
+      </div>
+      <div style="padding:0 20px 20px;display:flex;gap:8px;justify-content:flex-end;flex-shrink:0">
+        <button @click="caseModal.show=false" class="btn btn-ghost">Cancelar</button>
+        <button @click="saveCase" :disabled="!caseForm.title.trim()" class="btn btn-primary">{{ caseModal.editing ? 'Guardar' : 'Crear' }}</button>
+      </div>
     </div>
   </div>
-</div>
 
-<div class="lb-overlay hidden" id="lbModal" onclick="closeLb(event)">
-  <div class="lb-inner" onclick="event.stopPropagation()">
-    <div class="lb-bar">
-      <span class="lb-caption" id="lbCaption"></span>
-      <a id="lbDownload" href="#" download target="_blank"
-         class="btn btn-ghost" style="padding:4px 10px;font-size:11px">⬇ Descargar</a>
-      <button class="lb-close" onclick="closeLb()">✕</button>
+  <!-- Run detail -->
+  <div v-if="runModal.show" class="modal-overlay" @click.self="runModal.show=false">
+    <div class="modal-box" style="max-width:520px;max-height:88vh">
+      <div class="modal-head">
+        <h3>Detalle de ejecución</h3>
+        <button @click="runModal.show=false" class="btn btn-ghost" style="padding:4px 10px">✕</button>
+      </div>
+      <div style="padding:20px;overflow-y:auto;flex:1;display:flex;flex-direction:column;gap:14px">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div style="background:#22263a;border-radius:8px;padding:12px">
+            <div style="font-size:10px;color:#7c85a2;text-transform:uppercase;margin-bottom:6px">Estado</div>
+            <span :class="['chip', runModal.data?.status==='completed'?'chip-green':runModal.data?.status==='failed'?'chip-red':runModal.data?.status==='running'?'chip-purple':'chip-gray']">
+              {{ {pending:'Pendiente',running:'Corriendo',completed:'Completado',failed:'Fallido'}[runModal.data?.status]||'–' }}
+            </span>
+          </div>
+          <div style="background:#22263a;border-radius:8px;padding:12px">
+            <div style="font-size:10px;color:#7c85a2;text-transform:uppercase;margin-bottom:6px">Progreso</div>
+            <span style="font-weight:700">{{ runModal.data?.completed_cases }}/{{ runModal.data?.total_cases }}</span>
+            <span v-if="runModal.data?.failed_cases>0" style="color:#f87171;font-size:11px;margin-left:6px">{{ runModal.data.failed_cases }} fallidos</span>
+          </div>
+          <div style="background:#22263a;border-radius:8px;padding:12px">
+            <div style="font-size:10px;color:#7c85a2;text-transform:uppercase;margin-bottom:6px">Tipo</div>
+            <span style="font-family:monospace;font-size:12px">{{ runModal.data?.type }}</span>
+          </div>
+          <div style="background:#22263a;border-radius:8px;padding:12px">
+            <div style="font-size:10px;color:#7c85a2;text-transform:uppercase;margin-bottom:6px">Modelo</div>
+            <span style="font-family:monospace;font-size:12px">{{ runModal.data?.model }}</span>
+          </div>
+        </div>
+        <div v-if="runModal.data?.error" style="background:rgba(248,113,113,.08);border:1px solid rgba(248,113,113,.2);border-radius:8px;padding:12px;font-size:12px;color:#fca5a5;white-space:pre-wrap">{{ runModal.data.error.slice(0,600) }}</div>
+        <div v-if="runModal.data?.conversation_run_ids?.length">
+          <div style="font-size:11px;font-weight:600;color:#7c85a2;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Conversaciones ({{ runModal.data.conversation_run_ids.length }})</div>
+          <div style="max-height:180px;overflow-y:auto;display:flex;flex-direction:column;gap:4px">
+            <div v-for="rid in runModal.data.conversation_run_ids" :key="rid"
+              style="font-family:monospace;font-size:11px;color:#7c85a2;background:#22263a;border-radius:5px;padding:4px 8px">{{ rid }}</div>
+          </div>
+        </div>
+        <div style="font-size:11px;color:#7c85a2;line-height:1.8">
+          <div>Creado: {{ fmtDate(runModal.data?.created_at) }}</div>
+          <div v-if="runModal.data?.started_at">Iniciado: {{ fmtDate(runModal.data.started_at) }}</div>
+          <div v-if="runModal.data?.finished_at">Finalizado: {{ fmtDate(runModal.data.finished_at) }}</div>
+        </div>
+      </div>
     </div>
-    <img id="lbImg" class="lb-img hidden" src="" alt=""/>
-    <iframe id="lbPdf" class="lb-pdf hidden" src=""></iframe>
   </div>
-</div>
+
+  <!-- Confirm -->
+  <div v-if="confirmModal.show" class="modal-overlay" @click.self="confirmModal.show=false">
+    <div class="modal-box" style="max-width:360px;text-align:center">
+      <div style="padding:28px">
+        <h3 style="font-size:16px;margin-bottom:10px">{{ confirmModal.title }}</h3>
+        <p style="color:#7c85a2;font-size:13px;margin-bottom:20px;line-height:1.5">{{ confirmModal.msg }}</p>
+        <div style="display:flex;gap:10px;justify-content:center">
+          <button @click="confirmModal.show=false" class="btn btn-ghost">Cancelar</button>
+          <button @click="runConfirm" class="btn btn-danger">Confirmar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Executive Report -->
+  <div v-if="showReport" class="modal-overlay" @click.self="showReport=false">
+    <div class="modal-box" style="max-width:840px;max-height:90vh">
+      <div class="modal-head" style="flex-shrink:0">
+        <div>
+          <h3>Reporte Ejecutivo QA</h3>
+          <div style="font-size:11px;color:#7c85a2;margin-top:2px">{{ new Date().toLocaleDateString('es-MX',{year:'numeric',month:'long',day:'numeric'}) }}</div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button @click="copyReport" class="btn btn-ghost" style="font-size:12px">Copiar</button>
+          <button @click="downloadReport" class="btn btn-ghost" style="font-size:12px">⬇ .txt</button>
+          <button @click="showReport=false" class="btn btn-danger" style="font-size:12px;padding:4px 10px">✕</button>
+        </div>
+      </div>
+      <div style="overflow-y:auto;padding:20px;flex:1;font-size:13px;line-height:1.7">
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px">
+          <div style="background:#22263a;border-radius:8px;padding:10px 14px;text-align:center">
+            <div style="font-size:22px;font-weight:700;color:#6c63ff">{{ analyses.length }}</div>
+            <div style="font-size:10px;color:#7c85a2;text-transform:uppercase">Analizados</div>
+          </div>
+          <div style="background:#22263a;border-radius:8px;padding:10px 14px;text-align:center">
+            <div style="font-size:22px;font-weight:700;color:#4ade80">{{ anStats.pctOk }}%</div>
+            <div style="font-size:10px;color:#7c85a2;text-transform:uppercase">Tasa éxito</div>
+          </div>
+          <div style="background:#22263a;border-radius:8px;padding:10px 14px;text-align:center">
+            <div style="font-size:22px;font-weight:700;color:#4ade80">{{ anStats.ok }}</div>
+            <div style="font-size:10px;color:#7c85a2;text-transform:uppercase">Cumplidos</div>
+          </div>
+          <div style="background:#22263a;border-radius:8px;padding:10px 14px;text-align:center">
+            <div style="font-size:22px;font-weight:700;color:#f87171">{{ anStats.fail }}</div>
+            <div style="font-size:10px;color:#7c85a2;text-transform:uppercase">Fallidos</div>
+          </div>
+        </div>
+        <div v-if="anGroups.length" style="margin-bottom:20px">
+          <h4 style="font-size:11px;text-transform:uppercase;letter-spacing:.07em;font-weight:700;color:#6c63ff;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid #2e3250">Resultados por grupo</h4>
+          <table style="width:100%;border-collapse:collapse;font-size:12px">
+            <thead><tr style="background:#22263a">
+              <th class="th">Grupo</th><th class="th" style="text-align:right">Total</th><th class="th" style="text-align:right">Cumplidos</th><th class="th" style="text-align:right">Fallidos</th><th class="th" style="text-align:right">Sin eval.</th>
+            </tr></thead>
+            <tbody>
+              <tr v-for="g in anGroups" :key="g.id" style="border-top:1px solid #2e3250">
+                <td class="td">{{ g.id }}</td>
+                <td class="td" style="text-align:right">{{ g.ok+g.fail+g.pend }}</td>
+                <td class="td" style="text-align:right;color:#4ade80">{{ g.ok }} ({{ g.ok+g.fail+g.pend?Math.round(g.ok/(g.ok+g.fail+g.pend)*100):0 }}%)</td>
+                <td class="td" style="text-align:right;color:#f87171">{{ g.fail }}</td>
+                <td class="td" style="text-align:right;color:#fbbf24">{{ g.pend }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div v-if="anStats.fail>0">
+          <h4 style="font-size:11px;text-transform:uppercase;letter-spacing:.07em;font-weight:700;color:#6c63ff;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid #2e3250">Casos fallidos ({{ Math.min(anStats.fail,20) }})</h4>
+          <div v-for="a in analyses.filter(x=>x.complete===false).slice(0,20)" :key="a._id"
+            style="padding:10px 14px;border-radius:8px;background:rgba(248,113,113,.05);border:1px solid rgba(248,113,113,.15);margin-bottom:8px">
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:5px">
+              <span v-if="a.scenario_group_id" class="chip chip-blue" style="font-size:10px">{{ a.scenario_group_id }}</span>
+              <span v-if="a.user_id" style="font-size:11px;color:#7c85a2">{{ a.user_id }}</span>
+              <span style="margin-left:auto;font-size:10px;color:#7c85a2">{{ fmtDate(a.created_at) }}</span>
+            </div>
+            <div style="font-size:12px;color:#7c85a2;line-height:1.5;white-space:pre-wrap">{{ (a.analysis||'(sin análisis)').slice(0,400) }}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast global (bottom-right) -->
+  <transition name="fade">
+    <div v-if="globalToast" :style="`position:fixed;bottom:20px;right:20px;z-index:200;padding:12px 18px;border-radius:10px;font-size:13px;font-weight:600;border:1px solid;${globalToast.type==='success'?'background:rgba(20,83,45,.85);color:#4ade80;border-color:#15803d':globalToast.type==='error'?'background:rgba(127,29,29,.85);color:#fca5a5;border-color:#991b1b':'background:#22263a;color:#e2e8f0;border-color:#2e3250'}`">
+      {{ globalToast.msg }}
+    </div>
+  </transition>
+
+</div><!-- /app -->
 
 <script>
-// ── State ──────────────────────────────────────────────────────────────────
-let currentPage = 'dashboard';
-let pollTimer = null;
-let sseSource = null;
-let convList = [];
-let currentConvId = null;
-let convSearchField = 'session_id';
-let convSearchQuery = '';
-let convFilterStatus = 'all';
-let convFilterObjective = 'all';
-let analysesList = [];
-let analysisSearchQuery = '';
-let analysisFilterStatus   = 'all'; // 'all' | 'ok' | 'fail' | 'pending'
-let analysisFilterGroup    = '';
-let analysisFilterCampaign = '';
+const { createApp, ref, reactive, computed, watch, nextTick, onMounted } = Vue;
 
-// ── Navigation ──────────────────────────────────────────────────────────────
-function showPage(name, el) {
-  currentPage = name;
-  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-  el.classList.add('active');
-  const titles = {dashboard:'Dashboard', conversations:'Conversaciones', analyses:'Análisis', cases:'Cases JSON', run:'Ejecutar Batch'};
-  document.getElementById('pageTitle').textContent = titles[name] || name;
-  clearInterval(pollTimer);
-  if (sseSource) { sseSource.close(); sseSource = null; }
-  currentConvId = null;
-  if (name === 'conversations') { convPage = 1; convSearchQuery = ''; convFilterStatus = 'all'; convFilterObjective = 'all'; }
-  if (name === 'analyses') { analysisSearchQuery = ''; analysisFilterStatus = 'all'; analysisFilterGroup = ''; analysisFilterCampaign = ''; }
-  render();
-}
+createApp({
+  data() {
+    return {
+      // ── Config (persisted) ──
+      apiBase: localStorage.getItem('qa_apiBase') || 'http://localhost:8000/v1',
+      accountId: localStorage.getItem('qa_accountId') || '3057',
 
-function render() {
-  const c = document.getElementById('content');
-  if (currentPage === 'dashboard')         renderDashboard(c);
-  else if (currentPage === 'conversations') renderConversations(c);
-  else if (currentPage === 'analyses')      renderAnalyses(c);
-  else if (currentPage === 'cases')         renderCases(c);
-  else if (currentPage === 'run')           renderRun(c);
-}
+      // ── Navigation ──
+      page: 'dashboard',
+      PAGE_TITLES: {
+        dashboard: 'Dashboard',
+        conversations: 'Conversaciones',
+        analyses: 'Análisis',
+        suites: 'Test Suites',
+        runs: 'Ejecuciones',
+      },
+      NAV: [
+        { id: 'dashboard',     label: 'Dashboard',      icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>' },
+        { id: 'conversations', label: 'Conversaciones', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>' },
+        { id: 'analyses',      label: 'Análisis',       icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>' },
+        { id: 'suites',        label: 'Test Suites',    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>' },
+        { id: 'runs',          label: 'Ejecuciones',    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><polygon points="5 3 19 12 5 21 5 3"/></svg>' },
+      ],
+      STAT_CARDS: [
+        { key: 'sessions', label: 'Sesiones',  color: '#6c63ff' },
+        { key: 'messages', label: 'Mensajes',  color: '#4ade80' },
+        { key: 'insights', label: 'Insights',  color: '#00d4aa' },
+        { key: 'runs',     label: 'Runs',      color: '#fbbf24' },
+      ],
 
-// ── API helpers ──────────────────────────────────────────────────────────────
-async function api(method, path, body) {
-  const opts = { method, headers: { 'Content-Type': 'application/json' } };
-  if (body !== undefined) opts.body = JSON.stringify(body);
-  const r = await fetch(path, opts);
-  return r.json();
-}
+      // ── Global UI ──
+      loading: {},
+      toast: null,
+      globalToast: null,
+      _gtTimer: null,
+      _pollTimer: null,
+      _runsPollTimer: null,
 
-// ── DASHBOARD ─────────────────────────────────────────────────────────────────
-async function renderDashboard(c) {
-  c.innerHTML = `
-    <div class="stats-grid">
-      <div class="stat-card"><div class="label">Sesiones</div><div class="value accent" id="st-sessions">…</div></div>
-      <div class="stat-card"><div class="label">Mensajes</div><div class="value green" id="st-messages">…</div></div>
-      <div class="stat-card"><div class="label">Insights</div><div class="value teal" id="st-insights">…</div></div>
-      <div class="stat-card"><div class="label">Runs</div><div class="value warn" id="st-runs">…</div></div>
-    </div>
-    <div class="card">
-      <div class="card-header">
-        Últimas conversaciones
-        <div class="actions">
-          <button class="btn btn-ghost refresh-btn" onclick="refreshDashboard()">↻ Actualizar</button>
-          <button class="btn btn-danger refresh-btn" onclick="confirmClearDB()">🗑 Limpiar DB</button>
-        </div>
-      </div>
-      <div id="dash-conv-table">${loading()}</div>
-    </div>
-  `;
-  await refreshDashboard();
-  pollTimer = setInterval(refreshDashboard, 5000);
-}
+      // ── Dashboard ──
+      stats: { sessions: 0, messages: 0, insights: 0, runs: 0 },
+      recentConvs: [],
 
-async function refreshDashboard() {
-  const [stats, convs] = await Promise.all([
-    api('GET', '/api/stats'),
-    api('GET', '/api/conversations'),
-  ]);
-  convList = convs;
-  document.getElementById('st-sessions').textContent = stats.sessions ?? '–';
-  document.getElementById('st-messages').textContent = stats.messages ?? '–';
-  document.getElementById('st-insights').textContent = stats.insights ?? '–';
-  document.getElementById('st-runs').textContent    = stats.runs ?? '–';
+      // ── Conversations ──
+      convs: [],
+      currentConvId: null,
+      convDetail: null,
+      convPage: 1,
+      CONV_PAGE_SIZE: 20,
+      convFilter: { field: 'session_id', query: '', status: 'all', objective: 'all' },
+      _rawStore: {},
 
-  const el = document.getElementById('dash-conv-table');
-  if (!el) return;
-  if (!convs.length) { el.innerHTML = `<div class="empty-state">Sin conversaciones</div>`; return; }
-  el.innerHTML = `<table>
-    <thead><tr>
-      <th>Session</th><th>Escenario</th><th>Usuario</th>
-      <th>Mensajes</th><th>Insight</th><th>Último</th>
-    </tr></thead>
-    <tbody>
-    ${convs.slice(0,30).map(r => `<tr onclick="openConversation('${r.session_id}')">
-      <td style="font-family:monospace;font-size:11px">${r.session_id.slice(0,16)}…</td>
-      <td title="${r.scenario||''}">${r.scenario_group_id||'–'}</td>
-      <td>${r.user_id||'–'}</td>
-      <td><span class="badge badge-blue">${r.message_count}</span></td>
-      <td>${r.insight_complete===1?'<span class="badge badge-green">✓</span>':r.insight_complete===0&&r.insight_summary?'<span class="badge badge-gray">pendiente</span>':'<span class="badge badge-gray">–</span>'}</td>
-      <td style="color:var(--muted);font-size:11px">${fmtDate(r.last_message_at)}</td>
-    </tr>`).join('')}
-    </tbody></table>`;
-}
+      // ── Analyses ──
+      analyses: [],
+      anPage: 1,
+      AN_PAGE_SIZE: 15,
+      anFilter: { status: 'all', group: '', search: '' },
+      showReport: false,
+      _chartDonut: null,
+      _chartBars: null,
 
-function openConversation(sid) {
-  currentConvId = sid;
-  showPage('conversations', document.querySelector('[data-page="conversations"]'));
-}
+      // ── Suites ──
+      suites: [],
+      currentSuite: null,
+      suiteCases: [],
+      suiteModal: { show: false, editing: null },
+      suiteForm: { title: '', description: '' },
+      caseModal: { show: false, editing: null },
+      caseForm: { title: '', description: '', payload: '{}', error: '' },
 
-// ── CONVERSATIONS ──────────────────────────────────────────────────────────────
-let convPage = 1;
-const CONV_PAGE_SIZE = 20;
+      // ── Runs ──
+      runs: [],
+      runsFilter: { suite_id: '' },
+      activeRuns: 0,
+      runModal: { show: false, data: null },
 
-async function renderConversations(c) {
-  if (currentConvId) {
-    renderConvDetail(c, currentConvId);
-    return;
-  }
-  c.innerHTML = `
-    <div class="card">
-      <div class="card-header">
-        Conversaciones
-        <div id="conv-counters" style="font-size:12px;color:var(--muted);font-weight:400;margin-left:8px"></div>
-        <div class="actions">
-          <button class="btn btn-ghost refresh-btn" onclick="loadConvList()">↻ Actualizar</button>
-          <a class="btn btn-success refresh-btn" href="/api/export/conversations" download="conversaciones.xlsx">⬇ Exportar Excel</a>
-        </div>
-      </div>
-      <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:10px 14px;border-bottom:1px solid var(--border)">
-        <div class="search-bar" style="flex:1;min-width:260px;margin:0;border:none;padding:0">
-          <select class="search-select" id="conv-field-sel" onchange="convSearch()" title="Campo de búsqueda">
-            <option value="session_id">Session ID</option>
-            <option value="run_id">Run ID</option>
-            <option value="user_id">Usuario</option>
-            <option value="scenario">Escenario</option>
-            <option value="scenario_group_id">Grupo</option>
-          </select>
-          <input class="search-input" id="conv-search-q" type="text"
-                 placeholder="Buscar…" oninput="convSearch()" value="${escHtml(convSearchQuery)}"/>
-          <button class="btn btn-ghost" style="padding:5px 10px;font-size:12px" onclick="clearConvSearch()">✕</button>
-        </div>
-        <div style="display:flex;gap:6px;align-items:center;flex-shrink:0">
-          <span style="font-size:11px;color:var(--muted);font-weight:600">Estado:</span>
-          <button id="fs-all"  class="btn btn-ghost conv-filter-btn ${convFilterStatus==='all'?'btn-primary':''}"  style="font-size:11px;padding:4px 10px" onclick="setConvFilter('status','all')">Todas</button>
-          <button id="fs-done" class="btn btn-ghost conv-filter-btn ${convFilterStatus==='done'?'btn-primary':''}" style="font-size:11px;padding:4px 10px" onclick="setConvFilter('status','done')">Analizadas</button>
-          <button id="fs-pend" class="btn btn-ghost conv-filter-btn ${convFilterStatus==='pend'?'btn-primary':''}" style="font-size:11px;padding:4px 10px" onclick="setConvFilter('status','pend')">En curso</button>
-        </div>
-        <div style="display:flex;gap:6px;align-items:center;flex-shrink:0">
-          <span style="font-size:11px;color:var(--muted);font-weight:600">Objetivo:</span>
-          <button id="fo-all"  class="btn btn-ghost conv-filter-btn ${convFilterObjective==='all'?'btn-primary':''}"  style="font-size:11px;padding:4px 10px" onclick="setConvFilter('obj','all')">Todos</button>
-          <button id="fo-ok"   class="btn btn-ghost conv-filter-btn ${convFilterObjective==='ok'?'btn-primary':''}"   style="font-size:11px;padding:4px 10px" onclick="setConvFilter('obj','ok')">Cumplido</button>
-          <button id="fo-fail" class="btn btn-ghost conv-filter-btn ${convFilterObjective==='fail'?'btn-primary':''}" style="font-size:11px;padding:4px 10px" onclick="setConvFilter('obj','fail')">No cumplido</button>
-        </div>
-      </div>
-      <div id="conv-list-wrap">${loading()}</div>
-      <div id="conv-pagination" style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-top:1px solid var(--border)"></div>
-    </div>`;
-  // restore field selector
-  const sel = document.getElementById('conv-field-sel');
-  if (sel) sel.value = convSearchField;
-  await loadConvList();
-  pollTimer = setInterval(loadConvList, 6000);
-}
+      // ── Modals ──
+      rawModal: { show: false, title: '', content: '' },
+      confirmModal: { show: false, title: '', msg: '', cb: null },
+    };
+  },
 
-function convSearch() {
-  convSearchField = document.getElementById('conv-field-sel')?.value || 'session_id';
-  convSearchQuery = document.getElementById('conv-search-q')?.value || '';
-  convPage = 1;
-  renderConvPage();
-}
+  computed: {
+    // Conversations
+    filteredConvs() {
+      let r = this.convs;
+      const q = this.convFilter.query.toLowerCase();
+      if (q) r = r.filter(c => String(c[this.convFilter.field]||'').toLowerCase().includes(q));
+      if (this.convFilter.status === 'done') r = r.filter(c => c.insight_summary!=null || c.insight_complete!=null);
+      if (this.convFilter.status === 'pend') r = r.filter(c => c.insight_summary==null && c.insight_complete==null);
+      if (this.convFilter.objective === 'ok')   r = r.filter(c => c.insight_complete === true);
+      if (this.convFilter.objective === 'fail')  r = r.filter(c => c.insight_complete === false);
+      return r;
+    },
+    convTotalPages() { return Math.max(1, Math.ceil(this.filteredConvs.length / this.CONV_PAGE_SIZE)); },
+    pagedConvs() {
+      const s = (this.convPage - 1) * this.CONV_PAGE_SIZE;
+      return this.filteredConvs.slice(s, s + this.CONV_PAGE_SIZE);
+    },
+    convPageInfo() {
+      const s = (this.convPage-1)*this.CONV_PAGE_SIZE+1;
+      const e = Math.min(this.convPage*this.CONV_PAGE_SIZE, this.filteredConvs.length);
+      const suf = this.filteredConvs.length !== this.convs.length ? ` (de ${this.convs.length} total)` : '';
+      return `${s}–${e} de ${this.filteredConvs.length}${suf}`;
+    },
+    convPageRange() {
+      const d = 2, pages = [], c = this.convPage, t = this.convTotalPages;
+      for (let i = Math.max(1,c-d); i <= Math.min(t,c+d); i++) pages.push(i);
+      return pages;
+    },
 
-function clearConvSearch() {
-  convSearchQuery = '';
-  const el = document.getElementById('conv-search-q');
-  if (el) el.value = '';
-  convPage = 1;
-  renderConvPage();
-}
+    // Analyses
+    anStats() {
+      const total = this.analyses.length;
+      const ok    = this.analyses.filter(a => a.complete === true).length;
+      const fail  = this.analyses.filter(a => a.complete === false).length;
+      return { total, ok, fail, pending: total-ok-fail, pctOk: total ? Math.round(ok/total*100) : 0 };
+    },
+    anStatCards() {
+      const s = this.anStats;
+      return [
+        { label: 'Total',      value: s.total,   color: '#6c63ff' },
+        { label: 'Tasa éxito', value: s.pctOk+'%', color: '#4ade80' },
+        { label: 'Cumplidos',  value: s.ok,      color: '#4ade80',  sub: s.total ? Math.round(s.ok/s.total*100)+'% del total' : '' },
+        { label: 'Fallidos',   value: s.fail,    color: '#f87171',  sub: s.total ? Math.round(s.fail/s.total*100)+'% del total' : '' },
+        { label: 'Sin evaluar',value: s.pending, color: '#fbbf24',  sub: s.total ? Math.round(s.pending/s.total*100)+'% del total' : '' },
+      ];
+    },
+    anGroups() {
+      const m = {};
+      this.analyses.forEach(a => {
+        const g = a.scenario_group_id || '(sin grupo)';
+        if (!m[g]) m[g] = { id: g, ok: 0, fail: 0, pend: 0 };
+        if (a.complete===true) m[g].ok++;
+        else if (a.complete===false) m[g].fail++;
+        else m[g].pend++;
+      });
+      return Object.values(m).sort((a,b) => (b.ok+b.fail+b.pend)-(a.ok+a.fail+a.pend));
+    },
+    anGroupNames() { return [...new Set(this.analyses.map(a=>a.scenario_group_id).filter(Boolean))].sort(); },
+    anStatusFilters() {
+      const s = this.anStats;
+      return [
+        { k:'all',     l:`Todos (${s.total})` },
+        { k:'ok',      l:`Cumplidos (${s.ok})` },
+        { k:'fail',    l:`Fallidos (${s.fail})` },
+        { k:'pending', l:`Sin evaluar (${s.pending})` },
+      ];
+    },
+    filteredAnalyses() {
+      let r = this.analyses;
+      if (this.anFilter.status === 'ok')      r = r.filter(a => a.complete === true);
+      if (this.anFilter.status === 'fail')    r = r.filter(a => a.complete === false);
+      if (this.anFilter.status === 'pending') r = r.filter(a => a.complete !== true && a.complete !== false);
+      if (this.anFilter.group)  r = r.filter(a => (a.scenario_group_id||'') === this.anFilter.group);
+      if (this.anFilter.search) {
+        const q = this.anFilter.search.toLowerCase();
+        r = r.filter(a => (a.analysis||'').toLowerCase().includes(q) || (a.scenario||'').toLowerCase().includes(q) || (a.user_id||'').toLowerCase().includes(q) || (a.session_id||'').toLowerCase().includes(q));
+      }
+      return r;
+    },
+    anTotalPages() { return Math.max(1, Math.ceil(this.filteredAnalyses.length / this.AN_PAGE_SIZE)); },
+    pagedAnalyses() {
+      const s = (this.anPage-1)*this.AN_PAGE_SIZE;
+      return this.filteredAnalyses.slice(s, s+this.AN_PAGE_SIZE);
+    },
+    anPageInfo() {
+      const s = (this.anPage-1)*this.AN_PAGE_SIZE+1;
+      const e = Math.min(this.anPage*this.AN_PAGE_SIZE, this.filteredAnalyses.length);
+      return `${s}–${e} de ${this.filteredAnalyses.length}`;
+    },
+    anPageRange() {
+      const d=2, pages=[], c=this.anPage, t=this.anTotalPages;
+      for (let i=Math.max(1,c-d); i<=Math.min(t,c+d); i++) pages.push(i);
+      return pages;
+    },
+  },
 
-function setConvFilter(type, val) {
-  if (type === 'status') convFilterStatus = val;
-  else convFilterObjective = val;
-  convPage = 1;
-  renderConvPage();
-}
+  watch: {
+    anFilter: { deep: true, handler() { this.anPage = 1; } },
+  },
 
-async function loadConvList() {
-  convList = await api('GET', '/api/conversations');
-  renderConvPage();
-}
+  mounted() {
+    this.navigate('dashboard');
+  },
 
-function renderConvPage() {
-  const el = document.getElementById('conv-list-wrap');
-  const pg = document.getElementById('conv-pagination');
-  if (!el) return;
+  methods: {
+    // ── Config ──
+    saveSettings() {
+      localStorage.setItem('qa_apiBase', this.apiBase);
+      localStorage.setItem('qa_accountId', this.accountId);
+      this.showGlobalToast('Configuración guardada', 'success');
+    },
 
-  // ── counters (always over full list) ──
-  const totalAll    = convList.length;
-  const totalDone   = convList.filter(r => r.insight_summary != null || r.insight_complete != null).length;
-  const totalOk     = convList.filter(r => r.insight_complete === 1).length;
-  const ctrEl = document.getElementById('conv-counters');
-  if (ctrEl) ctrEl.innerHTML =
-    `${totalAll} conversaciones · <span style="color:var(--accent2)">${totalDone} analizadas</span> · <span style="color:var(--green)">${totalOk} objetivo cumplido</span>`;
+    // ── Navigation ──
+    navigate(pg) {
+      clearInterval(this._pollTimer);
+      clearInterval(this._runsPollTimer);
+      this._pollTimer = null;
+      this._runsPollTimer = null;
+      this.page = pg;
+      this.currentConvId = null;
+      this.convDetail = null;
 
-  // ── update filter button active state ──
-  ['all','done','pend'].forEach(v => document.getElementById('fs-'+v)?.classList.toggle('btn-primary', convFilterStatus===v));
-  ['all','ok','fail'].forEach(v  => document.getElementById('fo-'+v)?.classList.toggle('btn-primary', convFilterObjective===v));
+      if (pg === 'dashboard')     this.startDashboardPoll();
+      if (pg === 'conversations') { this.loadConvs(); this._pollTimer = setInterval(() => this.loadConvs(), 6000); }
+      if (pg === 'analyses')      this.loadAnalyses();
+      if (pg === 'suites')        { this.loadSuites(); }
+      if (pg === 'runs')          { this.loadSuites(); this.loadRuns(); this.startRunsPoll(); }
+    },
 
-  // ── apply filters ──
-  let filtered = convList;
-  if (convSearchQuery)
-    filtered = filtered.filter(r => (String(r[convSearchField] || '')).toLowerCase().includes(convSearchQuery.toLowerCase()));
-  if (convFilterStatus === 'done')
-    filtered = filtered.filter(r => r.insight_summary != null || r.insight_complete != null);
-  else if (convFilterStatus === 'pend')
-    filtered = filtered.filter(r => r.insight_summary == null && r.insight_complete == null);
-  if (convFilterObjective === 'ok')
-    filtered = filtered.filter(r => r.insight_complete === 1);
-  else if (convFilterObjective === 'fail')
-    filtered = filtered.filter(r => r.insight_complete === 0);
-
-  if (!filtered.length) {
-    el.innerHTML = `<div class="empty-state">Sin resultados para los filtros aplicados</div>`;
-    if (pg) pg.innerHTML = '';
-    return;
-  }
-
-  const totalPages = Math.ceil(filtered.length / CONV_PAGE_SIZE);
-  if (convPage > totalPages) convPage = totalPages;
-  const start = (convPage - 1) * CONV_PAGE_SIZE;
-  const page  = filtered.slice(start, start + CONV_PAGE_SIZE);
-
-  el.innerHTML = `<table>
-    <thead><tr>
-      <th>Session ID</th><th>Run ID</th><th>Escenario</th><th>Usuario</th>
-      <th>Msjs</th><th>Campaigns</th><th>Estado</th><th>Objetivo</th><th>Inicio</th>
-    </tr></thead>
-    <tbody>
-    ${page.map(r => {
-      const hasAnalysis = r.insight_summary != null || r.insight_complete != null;
-      const estadoBadge = hasAnalysis
-        ? `<span class="chip chip-blue">✓ Analizada</span>`
-        : `<span class="chip chip-orange">⏳ En curso</span>`;
-      const objetivoBadge = !hasAnalysis
-        ? `<span style="color:var(--muted);font-size:11px">–</span>`
-        : r.insight_complete === 1
-          ? `<span class="chip chip-green">✓ Cumplido</span>`
-          : `<span class="chip chip-red">✗ No cumplido</span>`;
-      const camps = Array.isArray(r.campaigns) ? r.campaigns : [];
-      const campHtml = camps.length
-        ? camps.map(c => `<span class="tag" style="color:var(--accent2);border-color:rgba(0,212,170,.3)" title="${escHtml(c.campaign_id||'')}">📣 ${escHtml(c.campaign_name||c.campaign_id||'–')}</span>`).join('')
-        : `<span style="color:var(--muted);font-size:11px">–</span>`;
-      return `<tr onclick="openConvDetail('${r.session_id}')">
-        <td style="font-family:monospace;font-size:11px" title="${r.session_id}">${r.session_id.slice(0,18)}…</td>
-        <td style="font-family:monospace;font-size:11px" title="${r.run_id||''}">${r.run_id ? r.run_id.slice(0,12)+'…' : '–'}</td>
-        <td title="${r.scenario||''}">${r.scenario_group_id ? `<span class="badge badge-blue">${r.scenario_group_id}</span>` : '–'}</td>
-        <td>${r.user_id||'–'}</td>
-        <td><b>${r.message_count}</b></td>
-        <td>${campHtml}</td>
-        <td>${estadoBadge}</td>
-        <td>${objetivoBadge}</td>
-        <td style="color:var(--muted);font-size:11px">${fmtDate(r.started_at)}</td>
-      </tr>`;
-    }).join('')}
-    </tbody></table>`;
-
-  if (pg) {
-    const from = start + 1;
-    const to   = Math.min(start + CONV_PAGE_SIZE, filtered.length);
-    const total = filtered.length;
-    const isFiltered = filtered.length !== convList.length;
-    const suffix = isFiltered ? ` (de ${convList.length} total)` : '';
-    pg.innerHTML = `
-      <span style="font-size:12px;color:var(--muted)">${from}–${to} de ${total}${suffix}</span>
-      <div style="display:flex;gap:4px;align-items:center">
-        <button class="btn btn-ghost" style="padding:4px 10px" onclick="convGoPage(1)" ${convPage===1?'disabled':''}>«</button>
-        <button class="btn btn-ghost" style="padding:4px 10px" onclick="convGoPage(${convPage-1})" ${convPage===1?'disabled':''}>‹</button>
-        ${pageButtons(convPage, totalPages)}
-        <button class="btn btn-ghost" style="padding:4px 10px" onclick="convGoPage(${convPage+1})" ${convPage===totalPages?'disabled':''}>›</button>
-        <button class="btn btn-ghost" style="padding:4px 10px" onclick="convGoPage(${totalPages})" ${convPage===totalPages?'disabled':''}>»</button>
-      </div>`;
-  }
-}
-
-function pageButtons(current, total) {
-  const delta = 2;
-  const pages = [];
-  for (let i = Math.max(1, current - delta); i <= Math.min(total, current + delta); i++) pages.push(i);
-  return pages.map(p => `
-    <button class="btn ${p===current?'btn-primary':'btn-ghost'}" style="padding:4px 10px;min-width:32px"
-      onclick="convGoPage(${p})">${p}</button>`).join('');
-}
-
-function convGoPage(p) {
-  convPage = Math.max(1, p);
-  renderConvPage();
-}
-
-function openConvDetail(sid) {
-  currentConvId = sid;
-  clearInterval(pollTimer);
-  renderConvDetail(document.getElementById('content'), sid);
-}
-
-async function renderConvDetail(c, sid) {
-  c.innerHTML = `
-    <button class="btn btn-ghost back-btn" onclick="backToConvList()">← Volver</button>
-    <div class="conv-detail" id="conv-detail-wrap">${loading('Cargando conversación…')}</div>`;
-  await loadConvDetail(sid);
-  pollTimer = setInterval(() => loadConvDetail(sid), 4000);
-}
-
-// Persistent state for case panel across polls
-let _casePromptExpanded = false;
-let _caseExtrasVisible  = false;
-
-function toggleCasePrompt() {
-  _casePromptExpanded = !_casePromptExpanded;
-  const t = document.getElementById('case-prompt-text');
-  const b = document.getElementById('case-prompt-toggle');
-  if (!t || !b) return;
-  t.classList.toggle('expanded', _casePromptExpanded);
-  b.textContent = _casePromptExpanded ? 'Ver menos' : 'Ver más';
-}
-
-function toggleCaseExtras() {
-  _caseExtrasVisible = !_caseExtrasVisible;
-  const e = document.getElementById('case-extras');
-  const b = document.getElementById('case-extras-toggle');
-  if (!e || !b) return;
-  e.classList.toggle('visible', _caseExtrasVisible);
-  b.textContent = _caseExtrasVisible ? 'Ocultar detalles' : 'Ver todos los campos';
-}
-
-function _buildCasePanel(caseData) {
-  if (!caseData) return '';
-  const p = caseData.payload || {};
-
-  // -- Guaranteed fields --
-  const userName   = p.user_name || p.user_id || '';
-  const promptTxt  = p.prompt || '';
-  const analysisTxt= p.analysisPrompt || '';
-  const campaigns  = Array.isArray(p.campaigns) ? p.campaigns : [];
-
-  // Campaign chips
-  const campChips = campaigns.map(c =>
-    `<span class="case-camp-chip" title="${escHtml(c.whatsapp_template_name||'')}">
-      ${escHtml(c.campaign_name || c.campaign_id || '?')}
-    </span>`
-  ).join('');
-
-  // -- Extra fields (everything else) --
-  const SKIP = new Set(['user_name','prompt','analysisPrompt','campaigns','user_id']);
-  const extras = Object.entries(p).filter(([k]) => !SKIP.has(k));
-  const extraRows = extras.map(([k, v]) => {
-    const val = typeof v === 'object' ? JSON.stringify(v, null, 2) : String(v);
-    const isMono = typeof v === 'object' || val.length > 60;
-    return `<div class="case-field">
-      <span class="case-field-lbl">${escHtml(k)}</span>
-      <span class="case-field-val${isMono ? ' mono' : ''}">${escHtml(val)}</span>
-    </div>`;
-  }).join('');
-
-  const promptExpandedCls = _casePromptExpanded ? ' expanded' : '';
-  const extraVisCls        = _caseExtrasVisible  ? ' visible'  : '';
-  const promptToggleLbl    = _casePromptExpanded ? 'Ver menos' : 'Ver más';
-  const extrasToggleLbl    = _caseExtrasVisible  ? 'Ocultar detalles' : 'Ver todos los campos';
-
-  return `
-    <div class="case-panel">
-      <div class="case-panel-head">
-        <span class="case-panel-badge">Caso de prueba</span>
-        ${userName ? `<span class="case-panel-user">${escHtml(userName)}</span>` : ''}
-        <div class="case-panel-camps">${campChips}</div>
-      </div>
-      <div class="case-panel-body">
-
-        ${promptTxt ? `
-        <div class="case-field">
-          <span class="case-field-lbl">Escenario</span>
-          <div style="flex:1">
-            <div class="case-prompt-wrap">
-              <div class="case-prompt-text${promptExpandedCls}" id="case-prompt-text">${escHtml(promptTxt)}</div>
-              <div class="case-prompt-fade"></div>
-            </div>
-            <button class="case-toggle" id="case-prompt-toggle" onclick="toggleCasePrompt()">${promptToggleLbl}</button>
-          </div>
-        </div>` : ''}
-
-        ${analysisTxt ? `
-        <div class="case-field">
-          <span class="case-field-lbl">Criterio</span>
-          <span class="case-field-val" style="color:var(--muted);font-size:11px">${escHtml(analysisTxt)}</span>
-        </div>` : ''}
-
-        ${extras.length ? `
-        <hr class="case-divider">
-        <div class="case-extras${extraVisCls}" id="case-extras">${extraRows}</div>
-        <button class="case-toggle" id="case-extras-toggle" onclick="toggleCaseExtras()">${extrasToggleLbl}</button>
-        ` : ''}
-
-      </div>
-    </div>`;
-}
-
-async function loadConvDetail(sid) {
-  const data = await api('GET', `/api/conversations/${encodeURIComponent(sid)}`);
-  _currentConvData = data;
-  const el = document.getElementById('conv-detail-wrap');
-  if (!el) return;
-
-  const msgs    = data.messages || [];
-  const insight = data.insight;
-
-  // Capture scroll state BEFORE replacing innerHTML
-  const oldScroll  = el.querySelector('.conv-messages');
-  const isFirstLoad = !oldScroll;
-  const atBottom   = isFirstLoad || (
-    oldScroll.scrollHeight - oldScroll.scrollTop - oldScroll.clientHeight < 60
-  );
-  const savedTop = oldScroll?.scrollTop ?? 0;
-
-  const meta = msgs[0] || {};
-  const metaCamps = (() => {
-    try {
-      const c = meta.campaigns;
-      return Array.isArray(c) ? c : (typeof c === 'string' ? JSON.parse(c) : []);
-    } catch { return []; }
-  })();
-
-  const casePanel = _buildCasePanel(data.case);
-
-  el.innerHTML = `
-    <div class="conv-header">
-      <span style="font-family:monospace;font-size:11px;color:var(--muted)">${sid}</span>
-      ${meta.scenario_group_id ? `<span class="badge badge-blue">${meta.scenario_group_id}</span>` : ''}
-      ${meta.scenario ? `<span class="tag">${escHtml(meta.scenario)}</span>` : ''}
-      ${meta.user_id ? `<span class="tag">user: ${escHtml(meta.user_id)}</span>` : ''}
-      ${meta.run_id ? `<span class="tag" style="font-family:monospace">run: ${meta.run_id.slice(0,12)}…</span>` : ''}
-      ${metaCamps.map(c => `<span class="tag" style="color:var(--accent2);border-color:rgba(0,212,170,.3)" title="ID: ${escHtml(c.campaign_id||'')} | Template: ${escHtml(c.whatsapp_template_name||'')}">📣 ${escHtml(c.campaign_name||c.campaign_id||'–')}</span>`).join('')}
-      <span class="badge badge-blue" style="margin-left:auto">${msgs.length} mensajes</span>
-      <button class="btn btn-ghost" style="font-size:11px;padding:4px 10px" onclick="copyConversation('${sid}')" title="Copiar conversación completa">Copiar</button>
-    </div>
-    <div class="conv-messages" id="msg-scroll">
-      ${casePanel}
-      ${msgs.map((m, i) => msgBubble(m, i)).join('')}
-    </div>
-    ${insight ? (() => {
-      const cls   = insight.complete === 1 ? 'ok' : insight.complete === 0 ? 'fail' : 'pending';
-      const label = insight.complete === 1 ? '✓ Objetivo cumplido' : insight.complete === 0 ? '✗ Objetivo no cumplido' : '⏳ Sin evaluar';
-      return `<div class="insight-box ${cls}">
-        <div class="insight-label">${label}<span style="font-weight:400;font-size:10px;color:var(--muted)">${fmtDate(insight.created_at)}</span></div>
-        <div style="white-space:pre-wrap">${escHtml(insight.analysis||'(sin texto)')}</div>
-      </div>`;
-    })() : ''}
-  `;
-
-  // Restore scroll position after paint
-  const newScroll = el.querySelector('.conv-messages');
-  if (newScroll) {
-    requestAnimationFrame(() => {
-      newScroll.scrollTop = atBottom ? newScroll.scrollHeight : savedTop;
-    });
-  }
-}
-
-// Store raw_response data indexed by turn for the modal
-const _rawStore = {};
-
-// Cache last-loaded conversation data so copyConversation() can access it
-let _currentConvData = null;
-
-function copyConversation(sid) {
-  if (!_currentConvData) return;
-  const msgs = _currentConvData.messages || [];
-  const insight = _currentConvData.insight;
-  const meta = msgs[0] || {};
-
-  const casePayload = _currentConvData.case?.payload || null;
-
-  const lines = [];
-  lines.push('='.repeat(60));
-  lines.push(`Conversación: ${sid}`);
-  if (meta.run_id)             lines.push(`Run ID:        ${meta.run_id}`);
-  if (meta.user_id)            lines.push(`Usuario:       ${meta.user_id}`);
-  if (meta.scenario_group_id)  lines.push(`Grupo:         ${meta.scenario_group_id}`);
-  if (meta.scenario)           lines.push(`Escenario:     ${meta.scenario}`);
-  lines.push(`Mensajes:      ${msgs.length}`);
-  if (casePayload) {
-    lines.push('');
-    lines.push('--- Case ---');
-    Object.entries(casePayload).forEach(([k, v]) => {
-      lines.push(`${k}: ${typeof v === 'object' ? JSON.stringify(v) : v}`);
-    });
-  }
-  lines.push('='.repeat(60));
-  lines.push('');
-
-  msgs.forEach((m, i) => {
-    const n = i + 1;
-    const camps = (() => {
+    // ── API ──
+    async api(method, path, body) {
+      const headers = { 'Content-Type': 'application/json', 'X-Account-ID': this.accountId };
+      const opts = { method, headers };
+      if (body !== undefined) opts.body = JSON.stringify(body);
       try {
-        const c = m.campaigns;
-        const arr = Array.isArray(c) ? c : (typeof c === 'string' ? JSON.parse(c) : []);
-        return arr;
-      } catch { return []; }
-    })();
-    if (camps.length) {
-      const names = camps.map(c => c.campaign_name || c.campaign_id || '?').join(', ');
-      lines.push(`[Campaña: ${names}]`);
-    }
-    lines.push(`[${n}] QA : ${m.message || ''}`);
-    lines.push(`[${n}] BOT: ${m.response || ''}`);
-    lines.push('');
-  });
+        const r = await fetch(`${this.apiBase}${path}`, opts);
+        if (!r.ok) { const e = await r.json().catch(()=>({detail:'Error'})); throw new Error(e.detail||r.statusText); }
+        return await r.json();
+      } catch(e) { this.showGlobalToast(e.message, 'error'); throw e; }
+    },
+    async apiUpload(path, formData) {
+      try {
+        const r = await fetch(`${this.apiBase}${path}`, {
+          method: 'POST',
+          headers: { 'X-Account-ID': this.accountId },
+          body: formData,
+        });
+        if (!r.ok) { const e = await r.json().catch(()=>({detail:'Error'})); throw new Error(e.detail||r.statusText); }
+        return await r.json();
+      } catch(e) { this.showGlobalToast(e.message, 'error'); throw e; }
+    },
 
-  if (insight) {
-    lines.push('-'.repeat(60));
-    const status = insight.complete === 1 ? 'Objetivo cumplido' : insight.complete === 0 ? 'Objetivo no cumplido' : 'Sin evaluar';
-    lines.push(`Análisis (${status}):`);
-    lines.push(insight.analysis || '(sin texto)');
-    lines.push('-'.repeat(60));
-  }
+    // ── Dashboard ──
+    startDashboardPoll() {
+      this.loadDashboard();
+      this._pollTimer = setInterval(() => this.loadDashboard(), 5000);
+    },
+    async loadDashboard() {
+      this.$set ? null : null; // Vue 3
+      this.loading = { ...this.loading, dashboard: true };
+      try {
+        const [stats, convs] = await Promise.all([
+          this.api('GET', '/stats'),
+          this.api('GET', '/conversations'),
+        ]);
+        this.stats = stats;
+        this.recentConvs = convs;
+      } finally { this.loading = { ...this.loading, dashboard: false }; }
+    },
 
-  const text = lines.join('\n');
-  navigator.clipboard.writeText(text).then(() => {
-    const btn = document.querySelector(`[onclick="copyConversation('${sid}')"]`);
-    if (btn) {
-      const orig = btn.textContent;
-      btn.textContent = 'Copiado!';
-      btn.disabled = true;
-      setTimeout(() => { btn.textContent = orig; btn.disabled = false; }, 2000);
-    }
-  }).catch(err => console.error('Clipboard error:', err));
-}
-
-function msgBubble(m, idx) {
-  const n = idx + 1;
-  const rawKey = `raw_${n}`;
-
-  if (m.raw_response !== undefined && m.raw_response !== null) {
-    _rawStore[rawKey] = m.raw_response;
-  }
-
-  const hasRaw = _rawStore[rawKey] != null;
-  const turnNumEl = `<span class="tl-turn-num" title="Turno ${n}${hasRaw ? ' · click para ver raw_response' : ''}"
-    ${hasRaw ? `onclick="openRawModal(${n})"` : ''}>${n}</span>`;
-
-  // ── media ──
-  const images   = parseJsonField(m.images);
-  const files    = parseJsonField(m.files);
-  const mediaHtml = renderMedia(images, files);
-
-  // ── campaign trigger banner ──
-  const msgCamps = (() => {
-    try {
-      const c = m.campaigns;
-      if (!c) return [];
-      return Array.isArray(c) ? c : JSON.parse(c);
-    } catch { return []; }
-  })();
-  const campaignBanner = msgCamps.length ? `
-    <div class="tl-campaign">
-      [Campaña]
-      ${msgCamps.map(c => `<span title="ID: ${escHtml(c.campaign_id||'')} | Template: ${escHtml(c.whatsapp_template_name||'')}">${escHtml(c.campaign_name || c.campaign_id || '?')}</span>`).join(', ')}
-      <span class="tl-campaign-label">— el usuario responde a este mensaje de campaña</span>
-    </div>` : '';
-
-  const userRow = m.message ? `
-    <div class="tl-row user">
-      <div class="tl-who user">Usuario <span class="tl-time">${fmtDate(m.created_at)}</span></div>
-      <div class="tl-text">${escHtml(m.message)}</div>
-      ${mediaHtml ? `<div class="tl-media">${mediaHtml}</div>` : ''}
-    </div>` : '';
-
-  const botRow = m.response ? `
-    <div class="tl-row bot">
-      <div class="tl-who bot">Bot <span class="tl-time">${fmtDate(m.updated_at || m.created_at)}</span></div>
-      <div class="tl-text">${escHtml(m.response)}</div>
-    </div>` : '';
-
-  return `<div class="tl-turn">
-    ${turnNumEl}
-    ${campaignBanner}${userRow}${botRow}
-  </div>`;
-}
-
-function parseJsonField(val) {
-  if (!val) return [];
-  if (Array.isArray(val)) return val;
-  try { return JSON.parse(val) || []; } catch { return []; }
-}
-
-function renderMedia(images, files) {
-  let html = '';
-
-  for (const img of images) {
-    const url = typeof img === 'string' ? img : (img.url || img.src || '');
-    if (!url) continue;
-    const ext = url.split('?')[0].split('.').pop().toLowerCase();
-    if (ext === 'pdf') {
-      html += fileChip(url, '📄', url.split('/').pop() || 'documento.pdf');
-    } else {
-      html += `<img class="tl-thumb" src="${escAttr(url)}" alt="imagen"
-                    onclick="openLb('${escAttr(url)}','imagen')"
-                    onerror="this.style.display='none'"/>`;
-    }
-  }
-
-  for (const f of files) {
-    const url  = typeof f === 'string' ? f : (f.url || f.path || f.src || '');
-    const name = typeof f === 'string' ? url.split('/').pop() : (f.name || f.filename || url.split('/').pop() || 'archivo');
-    if (!url) continue;
-    const ext  = url.split('?')[0].split('.').pop().toLowerCase();
-    const icon = ext === 'pdf' ? '📄' : ['jpg','jpeg','png','gif','webp'].includes(ext) ? '🖼' : '📎';
-    if (['jpg','jpeg','png','gif','webp'].includes(ext)) {
-      html += `<img class="tl-thumb" src="${escAttr(url)}" alt="${escHtml(name)}"
-                    onclick="openLb('${escAttr(url)}','${escAttr(name)}')"
-                    onerror="this.style.display='none'"/>`;
-    } else {
-      html += fileChip(url, icon, name);
-    }
-  }
-
-  return html;
-}
-
-function fileChip(url, icon, name) {
-  const ext = url.split('?')[0].split('.').pop().toLowerCase();
-  const handler = ext === 'pdf'
-    ? `onclick="openLb('${escAttr(url)}','${escAttr(name)}');return false;"`
-    : `target="_blank"`;
-  return `<a href="${escAttr(url)}" class="tl-file" ${handler}>
-    <span class="tl-file-icon">${icon}</span>${escHtml(name.length > 30 ? name.slice(0,27)+'…' : name)}
-  </a>`;
-}
-
-function escAttr(s) {
-  return String(s||'').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
-}
-
-// ── Lightbox ──────────────────────────────────────────────────────────────────
-function openLb(url, caption) {
-  const ext = url.split('?')[0].split('.').pop().toLowerCase();
-  const isPdf = ext === 'pdf';
-  document.getElementById('lbCaption').textContent   = caption || '';
-  document.getElementById('lbDownload').href         = url;
-  document.getElementById('lbImg').classList.toggle('hidden', isPdf);
-  document.getElementById('lbPdf').classList.toggle('hidden', !isPdf);
-  if (isPdf) {
-    document.getElementById('lbPdf').src = url;
-  } else {
-    document.getElementById('lbImg').src = url;
-  }
-  document.getElementById('lbModal').classList.remove('hidden');
-}
-
-function closeLb(e) {
-  if (e && e.target !== document.getElementById('lbModal')) return;
-  document.getElementById('lbModal').classList.add('hidden');
-  document.getElementById('lbImg').src = '';
-  document.getElementById('lbPdf').src = '';
-}
-
-document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') {
-    closeLb();
-    closeRawModal();
-  }
-});
-
-function openRawModal(n) {
-  const raw = _rawStore[`raw_${n}`];
-  if (raw == null) return;
-  let text;
-  try {
-    const obj = typeof raw === 'string' ? JSON.parse(raw) : raw;
-    text = JSON.stringify(obj, null, 2);
-  } catch {
-    text = String(raw);
-  }
-  document.getElementById('rawModalTitle').textContent = `Turno ${n} — raw_response`;
-  document.getElementById('rawModalContent').textContent = text;
-  document.getElementById('rawModal').classList.remove('hidden');
-}
-
-function closeRawModal() {
-  document.getElementById('rawModal').classList.add('hidden');
-}
-document.getElementById('rawModal').addEventListener('click', e => {
-  if (e.target === document.getElementById('rawModal')) closeRawModal();
-});
-
-function backToConvList() {
-  clearInterval(pollTimer);
-  currentConvId = null;
-  _currentConvData = null;
-  _casePromptExpanded = false;
-  _caseExtrasVisible  = false;
-  renderConversations(document.getElementById('content'));
-}
-
-// ── ANALYSES ───────────────────────────────────────────────────────────────────
-
-let _chartDonut = null;
-let _chartBars  = null;
-let _chartLine  = null;
-let analysisPage = 1;
-const AN_PAGE_SIZE = 15;
-
-function _destroyCharts() {
-  [_chartDonut, _chartBars, _chartLine].forEach(c => { try { c?.destroy(); } catch(_){} });
-  _chartDonut = _chartBars = _chartLine = null;
-}
-
-// ── SVG Charts (DEAD CODE — kept as fallback marker) ──────────────────────────
-
-function svgDonut(ok, fail, pend, size = 130) {
-  const total = ok + fail + pend || 1;
-  const r = 44, cx = size / 2, cy = size / 2, sw = 20;
-  const circ = 2 * Math.PI * r;
-  const segs = [{v:ok,c:'#4ade80'},{v:fail,c:'#f87171'},{v:pend,c:'#fbbf24'}];
-  let offset = 0;
-  const arcs = segs.map(({v, c}) => {
-    const len = (v / total) * circ;
-    const arc = v > 0
-      ? `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${c}" stroke-width="${sw}"
-           stroke-dasharray="${len.toFixed(2)} ${(circ-len).toFixed(2)}"
-           stroke-dashoffset="${(-offset).toFixed(2)}"
-           transform="rotate(-90 ${cx} ${cy})" stroke-linecap="butt"/>`
-      : '';
-    offset += len;
-    return arc;
-  });
-  const pct = total === 1 && ok === 0 ? '–' : Math.round(ok / total * 100) + '%';
-  return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
-    <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="var(--border)" stroke-width="${sw}"/>
-    ${arcs.join('')}
-    <text x="${cx}" y="${cy - 6}" text-anchor="middle" dominant-baseline="middle"
-      fill="var(--text)" font-size="17" font-weight="700" font-family="inherit">${pct}</text>
-    <text x="${cx}" y="${cy + 13}" text-anchor="middle" dominant-baseline="middle"
-      fill="var(--muted)" font-size="9" font-family="inherit">cumplido</text>
-  </svg>`;
-}
-
-function svgGroupBars(groups) {
-  if (!groups.length) return '<div style="color:var(--muted);font-size:12px;padding:20px">Sin grupos</div>';
-  const W = Math.max(260, groups.length * 52 + 20);
-  const H = 110, padB = 28, padT = 8, padL = 4;
-  const maxVal = Math.max(...groups.map(g => g.ok + g.fail + g.pend), 1);
-  const barW = Math.min(36, Math.floor((W - padL * 2) / groups.length) - 6);
-  const chartH = H - padB - padT;
-
-  const bars = groups.map((g, i) => {
-    const x = padL + i * (barW + 6);
-    const okH   = Math.round((g.ok   / maxVal) * chartH);
-    const failH = Math.round((g.fail / maxVal) * chartH);
-    const pendH = Math.round((g.pend / maxVal) * chartH);
-    const total = okH + failH + pendH;
-    const baseY = H - padB;
-    const lbl = g.id.length > 7 ? g.id.slice(0, 6) + '…' : g.id;
-    return `
-      ${pendH > 0 ? `<rect x="${x}" y="${baseY - total}" width="${barW}" height="${pendH}" fill="#fbbf24" rx="2 2 0 0"/>` : ''}
-      ${failH > 0 ? `<rect x="${x}" y="${baseY - total + pendH}" width="${barW}" height="${failH}" fill="#f87171"/>` : ''}
-      ${okH   > 0 ? `<rect x="${x}" y="${baseY - okH}" width="${barW}" height="${okH}" fill="#4ade80" rx="0 0 2 2"/>` : ''}
-      <text x="${x + barW / 2}" y="${H - padB + 14}" text-anchor="middle"
-        fill="var(--muted)" font-size="8" font-family="inherit">${escHtml(lbl)}</text>
-      <text x="${x + barW / 2}" y="${baseY - total - 4}" text-anchor="middle"
-        fill="var(--muted)" font-size="8" font-family="inherit">${g.ok + g.fail + g.pend}</text>
-    `;
-  });
-
-  return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" style="overflow:visible">${bars.join('')}</svg>`;
-}
-
-// ── Analyses render ──────────────────────────────────────────────────────────
-
-async function renderAnalyses(c) {
-  _destroyCharts();
-  c.innerHTML = `
-    <div class="card" id="analyses-card">
-      <div class="card-header">
-        Análisis de conversaciones
-        <div class="actions">
-          <button class="btn btn-ghost refresh-btn" onclick="loadAnalyses()">↻ Actualizar</button>
-          <button class="btn btn-primary" style="font-size:12px" onclick="openReportModal()">Reporte ejecutivo</button>
-        </div>
-      </div>
-      <div id="analyses-wrap" style="padding:16px 18px">
-        <div id="an-top">${loading('Cargando análisis…')}</div>
-        <div id="an-list"></div>
-      </div>
-    </div>`;
-  await loadAnalyses();
-}
-
-async function loadAnalyses() {
-  const res = await api('GET', '/api/analyses');
-  if (!Array.isArray(res)) {
-    const top = document.getElementById('an-top');
-    if (top) top.innerHTML = `<div class="empty-state" style="color:var(--red)">Error: ${escHtml(res?.error||'desconocido')}</div>`;
-    return;
-  }
-  analysesList = res;
-  analysisPage = 1;
-  _renderAnalysisStats();
-  _renderAnalysisList();
-}
-
-function _applyAnalysisFilters(list) {
-  return list.filter(a => {
-    if (analysisFilterStatus === 'ok'      && a.complete !== 1) return false;
-    if (analysisFilterStatus === 'fail'    && a.complete !== 0) return false;
-    if (analysisFilterStatus === 'pending' && (a.complete === 1 || a.complete === 0)) return false;
-    if (analysisFilterGroup && (a.scenario_group_id||'') !== analysisFilterGroup) return false;
-    if (analysisFilterCampaign) {
-      const camps = (() => { try { const c = a.campaigns; return Array.isArray(c)?c:(c?JSON.parse(c):[]); } catch { return []; } })();
-      if (!camps.some(c => (c.campaign_name||c.campaign_id||'') === analysisFilterCampaign)) return false;
-    }
-    if (analysisSearchQuery) {
-      const q = analysisSearchQuery.toLowerCase();
-      return (a.analysis||'').toLowerCase().includes(q) ||
-             (a.scenario||'').toLowerCase().includes(q) ||
-             (a.scenario_group_id||'').toLowerCase().includes(q) ||
-             (a.user_id||'').toLowerCase().includes(q) ||
-             (a.session_id||'').toLowerCase().includes(q);
-    }
-    return true;
-  });
-}
-
-function setAnalysisFilter(type, val) {
-  if (type === 'status')   analysisFilterStatus   = val;
-  if (type === 'group')    analysisFilterGroup    = val;
-  if (type === 'campaign') analysisFilterCampaign = val;
-  analysisPage = 1;
-  _renderAnalysisList();
-}
-
-function analysisSearch() {
-  analysisSearchQuery = document.getElementById('analysis-search-q')?.value || '';
-  analysisPage = 1;
-  _renderAnalysisList();
-}
-
-function clearAnalysisSearch() {
-  analysisSearchQuery = '';
-  const el = document.getElementById('analysis-search-q');
-  if (el) el.value = '';
-  analysisPage = 1;
-  _renderAnalysisList();
-}
-
-function setAnalysisPage(p) {
-  analysisPage = p;
-  _renderAnalysisList();
-  document.getElementById('an-list')?.scrollIntoView({behavior:'smooth', block:'start'});
-}
-
-// ── Stats + Chart.js charts (only re-rendered on data reload) ─────────────────
-
-function _renderAnalysisStats() {
-  const top = document.getElementById('an-top');
-  if (!top) return;
-
-  const total   = analysesList.length;
-  const ok      = analysesList.filter(a => a.complete === 1).length;
-  const fail    = analysesList.filter(a => a.complete === 0).length;
-  const pending = total - ok - fail;
-  const pctOk   = total ? Math.round(ok / total * 100) : 0;
-
-  // Group aggregation
-  const groupMap = {};
-  analysesList.forEach(a => {
-    const g = a.scenario_group_id || '(sin grupo)';
-    if (!groupMap[g]) groupMap[g] = {id:g, ok:0, fail:0, pend:0};
-    if (a.complete === 1)      groupMap[g].ok++;
-    else if (a.complete === 0) groupMap[g].fail++;
-    else                       groupMap[g].pend++;
-  });
-  const groups = Object.values(groupMap).sort((a,b)=>(b.ok+b.fail+b.pend)-(a.ok+a.fail+a.pend));
-
-  // Timeline (group by day)
-  const dateMap = {};
-  analysesList.forEach(a => {
-    const d = (a.created_at||'').slice(0,10);
-    if (!d) return;
-    if (!dateMap[d]) dateMap[d] = {ok:0, fail:0, pend:0};
-    if (a.complete === 1)      dateMap[d].ok++;
-    else if (a.complete === 0) dateMap[d].fail++;
-    else                       dateMap[d].pend++;
-  });
-  const dates = Object.keys(dateMap).sort();
-  const hasTimeline = dates.length > 1;
-
-  _destroyCharts();
-
-  top.innerHTML = `
-    <div class="an-summary">
-      <div class="an-stat">
-        <span class="an-stat-lbl">Total analizados</span>
-        <span class="an-stat-val" style="color:var(--accent)">${total}</span>
-      </div>
-      <div class="an-stat ok">
-        <span class="an-stat-lbl">Tasa de éxito</span>
-        <span class="an-stat-val">${pctOk}%</span>
-      </div>
-      <div class="an-stat ok">
-        <span class="an-stat-lbl">Cumplidos</span>
-        <span class="an-stat-val">${ok}</span>
-        <span class="an-stat-sub">${total?Math.round(ok/total*100):0}% del total</span>
-      </div>
-      <div class="an-stat fail">
-        <span class="an-stat-lbl">Fallidos</span>
-        <span class="an-stat-val">${fail}</span>
-        <span class="an-stat-sub">${total?Math.round(fail/total*100):0}% del total</span>
-      </div>
-      <div class="an-stat pend">
-        <span class="an-stat-lbl">Sin evaluar</span>
-        <span class="an-stat-val">${pending}</span>
-        <span class="an-stat-sub">${total?Math.round(pending/total*100):0}% del total</span>
-      </div>
-    </div>
-    ${total > 0 ? `
-    <div class="an-charts-row">
-      <div class="an-chart-box" style="max-width:300px;min-width:220px">
-        <div class="an-chart-title">Distribución general</div>
-        <div style="position:relative;height:200px"><canvas id="chart-donut"></canvas></div>
-      </div>
-      ${groups.length >= 1 ? `
-      <div class="an-chart-box wide" style="overflow-x:auto">
-        <div class="an-chart-title">Resultados por grupo</div>
-        <div style="position:relative;height:200px;min-width:${Math.max(260,groups.length*72)}px">
-          <canvas id="chart-bars"></canvas>
-        </div>
-      </div>` : ''}
-    </div>
-    ${hasTimeline ? `
-    <div class="an-chart-box" style="margin-bottom:12px">
-      <div class="an-chart-title">Evolución temporal</div>
-      <div style="position:relative;height:160px"><canvas id="chart-line"></canvas></div>
-    </div>` : ''}` : ''}
-  `;
-
-  if (!total || typeof Chart === 'undefined') return;
-
-  Chart.defaults.color       = '#7c85a2';
-  Chart.defaults.borderColor = '#2e3250';
-  Chart.defaults.font.family = "'Segoe UI',system-ui,sans-serif";
-  Chart.defaults.font.size   = 11;
-
-  const C = {
-    ok:   {bg:'rgba(74,222,128,.82)',  b:'#4ade80'},
-    fail: {bg:'rgba(248,113,113,.82)', b:'#f87171'},
-    pend: {bg:'rgba(251,191,36,.82)',  b:'#fbbf24'},
-  };
-
-  // Doughnut
-  const ctxD = document.getElementById('chart-donut')?.getContext('2d');
-  if (ctxD) {
-    _chartDonut = new Chart(ctxD, {
-      type: 'doughnut',
-      data: {
-        labels: ['Cumplidos','Fallidos','Sin evaluar'],
-        datasets: [{
-          data: [ok, fail, pending],
-          backgroundColor: [C.ok.bg, C.fail.bg, C.pend.bg],
-          borderColor:     [C.ok.b,  C.fail.b,  C.pend.b],
-          borderWidth: 1.5, hoverOffset: 10,
-        }],
-      },
-      options: {
-        responsive:true, maintainAspectRatio:false, cutout:'68%',
-        plugins: {
-          legend: {position:'right', labels:{padding:14, usePointStyle:true, pointStyleWidth:9}},
-          tooltip: {callbacks:{label: ctx => ` ${ctx.label}: ${ctx.raw} (${total?Math.round(ctx.raw/total*100):0}%)`}},
-        },
-      },
-    });
-  }
-
-  // Stacked bar by group
-  const ctxB = document.getElementById('chart-bars')?.getContext('2d');
-  if (ctxB && groups.length) {
-    _chartBars = new Chart(ctxB, {
-      type: 'bar',
-      data: {
-        labels: groups.map(g=>g.id),
-        datasets: [
-          {label:'Cumplidos',   data:groups.map(g=>g.ok),   backgroundColor:C.ok.bg,   borderColor:C.ok.b,   borderWidth:1},
-          {label:'Fallidos',    data:groups.map(g=>g.fail), backgroundColor:C.fail.bg, borderColor:C.fail.b, borderWidth:1},
-          {label:'Sin evaluar', data:groups.map(g=>g.pend), backgroundColor:C.pend.bg, borderColor:C.pend.b, borderWidth:1},
-        ],
-      },
-      options: {
-        responsive:true, maintainAspectRatio:false,
-        scales: {
-          x: {stacked:true, grid:{color:'#2e3250'}, ticks:{maxRotation:35, font:{size:10}}},
-          y: {stacked:true, grid:{color:'#2e3250'}, beginAtZero:true, ticks:{stepSize:1}},
-        },
-        plugins: {
-          legend:  {position:'top', labels:{usePointStyle:true, padding:12}},
-          tooltip: {mode:'index', intersect:false},
-        },
-      },
-    });
-  }
-
-  // Line chart — timeline
-  const ctxL = document.getElementById('chart-line')?.getContext('2d');
-  if (ctxL && hasTimeline) {
-    _chartLine = new Chart(ctxL, {
-      type: 'line',
-      data: {
-        labels: dates,
-        datasets: [
-          {label:'Cumplidos',   data:dates.map(d=>dateMap[d].ok),   borderColor:C.ok.b,   backgroundColor:'rgba(74,222,128,.08)',  tension:.35, fill:true, pointRadius:3, borderWidth:2},
-          {label:'Fallidos',    data:dates.map(d=>dateMap[d].fail), borderColor:C.fail.b, backgroundColor:'rgba(248,113,113,.08)', tension:.35, fill:true, pointRadius:3, borderWidth:2},
-          {label:'Sin evaluar', data:dates.map(d=>dateMap[d].pend), borderColor:C.pend.b, backgroundColor:'rgba(251,191,36,.08)',  tension:.35, fill:true, pointRadius:3, borderWidth:2},
-        ],
-      },
-      options: {
-        responsive:true, maintainAspectRatio:false,
-        interaction:{mode:'index', intersect:false},
-        scales: {
-          x: {grid:{color:'#2e3250'}, ticks:{font:{size:10}}},
-          y: {grid:{color:'#2e3250'}, beginAtZero:true, ticks:{stepSize:1}},
-        },
-        plugins: {legend:{position:'top', labels:{usePointStyle:true, padding:12}}},
-      },
-    });
-  }
-}
-
-// ── Filtered + paginated list ─────────────────────────────────────────────────
-
-function _renderAnalysisList() {
-  const listEl = document.getElementById('an-list');
-  if (!listEl) return;
-
-  const total    = analysesList.length;
-  const filtered = _applyAnalysisFilters(analysesList);
-  const pageCount = Math.max(1, Math.ceil(filtered.length / AN_PAGE_SIZE));
-  if (analysisPage > pageCount) analysisPage = pageCount;
-  const pageItems = filtered.slice((analysisPage-1)*AN_PAGE_SIZE, analysisPage*AN_PAGE_SIZE);
-
-  const ok      = analysesList.filter(a => a.complete === 1).length;
-  const fail    = analysesList.filter(a => a.complete === 0).length;
-  const pending = total - ok - fail;
-
-  const allGroups = [...new Set(analysesList.map(a=>a.scenario_group_id).filter(Boolean))].sort();
-  const allCamps  = [...new Set(analysesList.flatMap(a=>{
-    try{const c=a.campaigns;const arr=Array.isArray(c)?c:(c?JSON.parse(c):[]);return arr.map(x=>x.campaign_name||x.campaign_id||'');}
-    catch{return [];}
-  }).filter(Boolean))].sort();
-
-  const statusBtns = [
-    {k:'all',    lbl:`Todos (${total})`,         cls:'all'},
-    {k:'ok',     lbl:`Cumplidos (${ok})`,        cls:'ok'},
-    {k:'fail',   lbl:`Fallidos (${fail})`,       cls:'fail'},
-    {k:'pending',lbl:`Sin evaluar (${pending})`, cls:'pend'},
-  ].map(b=>`<button class="an-filter-btn${analysisFilterStatus===b.k?' active '+b.cls:''}"
-    onclick="setAnalysisFilter('status','${b.k}')">${b.lbl}</button>`).join('');
-
-  const groupSel = allGroups.length ? `
-    <select class="search-select" onchange="setAnalysisFilter('group',this.value)">
-      <option value="">Todos los grupos</option>
-      ${allGroups.map(g=>`<option value="${escHtml(g)}"${analysisFilterGroup===g?' selected':''}>${escHtml(g)}</option>`).join('')}
-    </select>` : '';
-
-  const campSel = allCamps.length ? `
-    <select class="search-select" onchange="setAnalysisFilter('campaign',this.value)">
-      <option value="">Todas las campañas</option>
-      ${allCamps.map(g=>`<option value="${escHtml(g)}"${analysisFilterCampaign===g?' selected':''}>${escHtml(g)}</option>`).join('')}
-    </select>` : '';
-
-  function pgHtml() {
-    if (pageCount <= 1) return '';
-    const prev = `<button class="pg-btn" onclick="setAnalysisPage(${analysisPage-1})"${analysisPage<=1?' disabled':''}>←</button>`;
-    const next = `<button class="pg-btn" onclick="setAnalysisPage(${analysisPage+1})"${analysisPage>=pageCount?' disabled':''}>→</button>`;
-    const nums = [];
-    for (let i = 1; i <= pageCount; i++) {
-      if (i===1 || i===pageCount || Math.abs(i-analysisPage)<=2) {
-        nums.push(`<button class="pg-btn${i===analysisPage?' active':''}" onclick="setAnalysisPage(${i})">${i}</button>`);
-      } else if (nums[nums.length-1] !== '<span class="pg-ellipsis">…</span>') {
-        nums.push('<span class="pg-ellipsis">…</span>');
+    // ── Conversations ──
+    async loadConvs() {
+      this.loading = { ...this.loading, convs: true };
+      try { this.convs = await this.api('GET', '/conversations'); }
+      finally { this.loading = { ...this.loading, convs: false }; }
+    },
+    async openConvDetail(sid) {
+      this.currentConvId = sid;
+      this.convDetail = null;
+      this._rawStore = {};
+      this.loading = { ...this.loading, convDetail: true };
+      if (this.page !== 'conversations') {
+        this.page = 'conversations';
       }
-    }
-    const s = (analysisPage-1)*AN_PAGE_SIZE+1, e = Math.min(analysisPage*AN_PAGE_SIZE, filtered.length);
-    return `<div class="an-pagination">${prev}${nums.join('')}${next}<span class="pg-info">${s}–${e} de ${filtered.length}</span></div>`;
-  }
-
-  const cardsHtml = !pageItems.length
-    ? `<div class="empty-state">Sin resultados para los filtros aplicados</div>`
-    : pageItems.map((a, idx) => {
-        const aCamps  = (()=>{try{const c=a.campaigns;return Array.isArray(c)?c:(c?JSON.parse(c):[]);}catch{return [];}})();
-        const cardCls = a.complete===1?'ok':a.complete===0?'fail':'pending';
-        const badge   = a.complete===1
-          ? `<span class="chip chip-green">✓ Objetivo cumplido</span>`
-          : a.complete===0 ? `<span class="chip chip-red">✗ Objetivo no cumplido</span>`
-          : `<span class="chip chip-orange">⏳ Sin evaluar</span>`;
-        const eid = `atxt_${idx}`;
-        return `
-        <div class="analysis-card ${cardCls}">
-          <div class="analysis-meta">
-            <span style="font-family:monospace;font-size:11px;color:var(--muted)" title="${escHtml(a.session_id||'')}">${(a.session_id||'–').slice(0,18)}…</span>
-            ${a.scenario_group_id?`<span class="badge badge-blue">${escHtml(a.scenario_group_id)}</span>`:''}
-            ${a.scenario?`<span class="tag" title="${escHtml(a.scenario)}">${a.scenario.length>44?a.scenario.slice(0,42)+'…':escHtml(a.scenario)}</span>`:''}
-            ${a.user_id?`<span class="tag">👤 ${escHtml(a.user_id)}</span>`:''}
-            ${a.message_count?`<span class="tag">💬 ${a.message_count}</span>`:''}
-            ${aCamps.map(c=>`<span class="tag" style="color:var(--accent2);border-color:rgba(0,212,170,.3)">📣 ${escHtml(c.campaign_name||c.campaign_id||'–')}</span>`).join('')}
-            <span style="margin-left:auto;font-size:11px;color:var(--muted)">${fmtDate(a.created_at)}</span>
-          </div>
-          ${badge}
-          <div class="analysis-text" id="${eid}" style="margin-top:10px">${escHtml(a.analysis||'(sin análisis)')}</div>
-          <div class="analysis-actions">
-            <button class="btn btn-ghost" style="font-size:11px;padding:4px 10px"
-              onclick="toggleAnalysisExpand('${eid}',this)">▼ Expandir</button>
-            <button class="btn btn-primary" style="font-size:11px;padding:4px 12px"
-              onclick="openConvFromAnalysis('${escHtml(a.session_id||'')}')">↗ Ver conversación</button>
-            <span style="margin-left:auto;font-family:monospace;font-size:10px;color:var(--muted)"
-                  title="${escHtml(a.run_id||'')}">run: ${(a.run_id||'–').slice(0,12)}…</span>
-          </div>
-        </div>`;
-      }).join('');
-
-  listEl.innerHTML = `
-    <div class="an-filter-bar">
-      <div class="an-filter-group">${statusBtns}</div>
-      ${groupSel}${campSel}
-      <input class="search-input" style="flex:1;min-width:140px" id="analysis-search-q" type="text"
-             placeholder="Buscar en análisis, escenario, usuario…" oninput="analysisSearch()" value="${escHtml(analysisSearchQuery)}"/>
-      ${analysisSearchQuery?`<button class="btn btn-ghost" style="padding:5px 10px;font-size:12px" onclick="clearAnalysisSearch()">✕</button>`:''}
-    </div>
-    <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0 4px;flex-wrap:wrap;gap:6px">
-      <span style="font-size:12px;color:var(--muted)">${filtered.length} resultado${filtered.length!==1?'s':''}${filtered.length!==total?` de ${total} totales`:''}</span>
-      ${pgHtml()}
-    </div>
-    ${cardsHtml}
-    ${pageCount>1?`<div style="display:flex;justify-content:flex-end;margin-top:14px">${pgHtml()}</div>`:''}
-  `;
-}
-
-function toggleAnalysisExpand(id, btn) {
-  const el = document.getElementById(id);
-  if (!el) return;
-  const expanded = el.classList.toggle('expanded');
-  btn.textContent = expanded ? '▲ Colapsar' : '▼ Expandir';
-}
-
-function openConvFromAnalysis(sid) {
-  currentConvId = sid;
-  showPage('conversations', document.querySelector('[data-page="conversations"]'));
-}
-
-// ── Executive Report ─────────────────────────────────────────────────────────
-
-function openReportModal() {
-  const total   = analysesList.length;
-  if (!total) { alert('Sin datos para generar reporte.'); return; }
-  const ok      = analysesList.filter(a => a.complete === 1).length;
-  const fail    = analysesList.filter(a => a.complete === 0).length;
-  const pending = total - ok - fail;
-  const pctOk   = Math.round(ok / total * 100);
-
-  // Group breakdown
-  const groupMap = {};
-  analysesList.forEach(a => {
-    const g = a.scenario_group_id || '(sin grupo)';
-    if (!groupMap[g]) groupMap[g] = {id:g, ok:0, fail:0, pend:0};
-    if (a.complete === 1)      groupMap[g].ok++;
-    else if (a.complete === 0) groupMap[g].fail++;
-    else                       groupMap[g].pend++;
-  });
-  const groups = Object.values(groupMap).sort((a, b) => (b.ok+b.fail+b.pend) - (a.ok+a.fail+a.pend));
-
-  // Failed cases (latest 20)
-  const failedCases = analysesList
-    .filter(a => a.complete === 0)
-    .slice(0, 20);
-
-  // Campaign breakdown
-  const campMap = {};
-  analysesList.forEach(a => {
-    const camps = (() => { try { const c = a.campaigns; return Array.isArray(c)?c:(c?JSON.parse(c):[]); } catch { return []; } })();
-    camps.forEach(c => {
-      const k = c.campaign_name || c.campaign_id || '?';
-      if (!campMap[k]) campMap[k] = {name:k, ok:0, fail:0, total:0};
-      campMap[k].total++;
-      if (a.complete === 1) campMap[k].ok++;
-      else if (a.complete === 0) campMap[k].fail++;
-    });
-  });
-  const camps = Object.values(campMap).sort((a, b) => b.total - a.total);
-
-  const now = new Date().toLocaleDateString('es-MX', {year:'numeric',month:'long',day:'numeric'});
-
-  const groupRows = groups.map(g => {
-    const t = g.ok + g.fail + g.pend;
-    const p = Math.round(g.ok / t * 100);
-    return `<tr>
-      <td>${escHtml(g.id)}</td>
-      <td style="text-align:center">${t}</td>
-      <td style="text-align:center;color:#4ade80">${g.ok} (${p}%)</td>
-      <td style="text-align:center;color:#f87171">${g.fail}</td>
-      <td style="text-align:center;color:#fbbf24">${g.pend}</td>
-    </tr>`;
-  }).join('');
-
-  const campRows = camps.map(c => {
-    const p = Math.round(c.ok / c.total * 100);
-    return `<tr>
-      <td>${escHtml(c.name)}</td>
-      <td style="text-align:center">${c.total}</td>
-      <td style="text-align:center;color:#4ade80">${c.ok} (${p}%)</td>
-      <td style="text-align:center;color:#f87171">${c.fail}</td>
-    </tr>`;
-  }).join('');
-
-  const failItems = failedCases.map(a => `
-    <div class="report-fail-item">
-      <div class="report-fail-meta">
-        ${a.scenario_group_id ? `<span class="badge badge-blue">${escHtml(a.scenario_group_id)}</span>` : ''}
-        ${a.scenario ? `<span class="tag">${escHtml(a.scenario.length>50?a.scenario.slice(0,48)+'…':a.scenario)}</span>` : ''}
-        ${a.user_id ? `<span class="tag" style="color:var(--muted)">👤 ${escHtml(a.user_id)}</span>` : ''}
-        <span style="margin-left:auto;font-size:10px;color:var(--muted)">${fmtDate(a.created_at)}</span>
-      </div>
-      <div class="report-fail-text">${escHtml((a.analysis||'(sin análisis)').slice(0, 400))}${(a.analysis||'').length>400?'…':''}</div>
-    </div>`).join('');
-
-  const html = `
-    <div class="report-overlay" id="report-overlay" onclick="if(event.target===this)closeReportModal()">
-      <div class="report-box">
-        <div class="report-head">
-          <div>
-            <h3>Reporte Ejecutivo QA</h3>
-            <div style="font-size:11px;color:var(--muted);margin-top:2px">${now}</div>
-          </div>
-          <div class="report-head-actions">
-            <button class="btn btn-ghost" style="font-size:12px" onclick="copyReport()">Copiar texto</button>
-            <button class="btn btn-ghost" style="font-size:12px" onclick="downloadReport()">Descargar .txt</button>
-            <button class="btn btn-danger" style="font-size:12px" onclick="closeReportModal()">✕ Cerrar</button>
-          </div>
-        </div>
-        <div class="report-body">
-
-          <div class="report-section">
-            <h4>Resumen general</h4>
-            <div class="report-kpi-row">
-              <div class="report-kpi"><div class="rk-val" style="color:var(--accent)">${total}</div><div class="rk-lbl">Analizados</div></div>
-              <div class="report-kpi ok"><div class="rk-val">${pctOk}%</div><div class="rk-lbl">Tasa de éxito</div></div>
-              <div class="report-kpi ok"><div class="rk-val">${ok}</div><div class="rk-lbl">Cumplidos</div></div>
-              <div class="report-kpi fail"><div class="rk-val">${fail}</div><div class="rk-lbl">Fallidos</div></div>
-            </div>
-            <div style="margin-top:8px;font-size:12px;color:var(--muted)">
-              ${pending} conversaciones sin evaluar (${Math.round(pending/total*100)}%)
-            </div>
-          </div>
-
-          ${groups.length > 0 ? `
-          <div class="report-section">
-            <h4>Resultados por grupo</h4>
-            <table class="report-table">
-              <thead><tr><th>Grupo</th><th>Total</th><th>Cumplidos</th><th>Fallidos</th><th>Sin eval.</th></tr></thead>
-              <tbody>${groupRows}</tbody>
-            </table>
-          </div>` : ''}
-
-          ${camps.length > 0 ? `
-          <div class="report-section">
-            <h4>Resultados por campaña</h4>
-            <table class="report-table">
-              <thead><tr><th>Campaña</th><th>Total</th><th>Cumplidos</th><th>Fallidos</th></tr></thead>
-              <tbody>${campRows}</tbody>
-            </table>
-          </div>` : ''}
-
-          ${failedCases.length > 0 ? `
-          <div class="report-section">
-            <h4>Casos fallidos${failedCases.length < fail ? ` (mostrando ${failedCases.length} de ${fail})` : ''}</h4>
-            ${failItems}
-          </div>` : ''}
-
-        </div>
-      </div>
-    </div>`;
-
-  document.body.insertAdjacentHTML('beforeend', html);
-}
-
-function closeReportModal() {
-  document.getElementById('report-overlay')?.remove();
-}
-
-function _reportText() {
-  const total   = analysesList.length;
-  const ok      = analysesList.filter(a => a.complete === 1).length;
-  const fail    = analysesList.filter(a => a.complete === 0).length;
-  const pending = total - ok - fail;
-  const pctOk   = total ? Math.round(ok / total * 100) : 0;
-  const now     = new Date().toLocaleDateString('es-MX', {year:'numeric',month:'long',day:'numeric'});
-
-  const groupMap = {};
-  analysesList.forEach(a => {
-    const g = a.scenario_group_id || '(sin grupo)';
-    if (!groupMap[g]) groupMap[g] = {id:g, ok:0, fail:0, pend:0};
-    if (a.complete === 1) groupMap[g].ok++; else if (a.complete === 0) groupMap[g].fail++; else groupMap[g].pend++;
-  });
-
-  const lines = [
-    'REPORTE EJECUTIVO QA',
-    `Fecha: ${now}`,
-    '='.repeat(60),
-    '',
-    'RESUMEN GENERAL',
-    `  Total analizados : ${total}`,
-    `  Tasa de éxito    : ${pctOk}%`,
-    `  Cumplidos        : ${ok}`,
-    `  Fallidos         : ${fail}`,
-    `  Sin evaluar      : ${pending}`,
-    '',
-    'RESULTADOS POR GRUPO',
-    '  Grupo                  Total  Cumplido  Fallido  Sin eval.',
-    '  ' + '-'.repeat(58),
-    ...Object.values(groupMap).map(g => {
-      const t = g.ok + g.fail + g.pend;
-      return `  ${g.id.padEnd(22)} ${String(t).padEnd(6)} ${String(g.ok).padEnd(9)} ${String(g.fail).padEnd(8)} ${g.pend}`;
-    }),
-    '',
-    'CASOS FALLIDOS',
-    ...analysesList.filter(a => a.complete === 0).slice(0, 20).map(a =>
-      `\n  [${a.session_id?.slice(0,16)||'?'}] ${a.scenario_group_id||''} | ${a.scenario||''}\n  ${(a.analysis||'').slice(0,300)}`
-    ),
-  ];
-  return lines.join('\n');
-}
-
-function copyReport() {
-  navigator.clipboard.writeText(_reportText()).then(() => {
-    const btn = document.querySelector('#report-overlay .report-head-actions .btn-ghost');
-    if (btn) { const t = btn.textContent; btn.textContent = '¡Copiado!'; setTimeout(() => btn.textContent = t, 2000); }
-  });
-}
-
-function downloadReport() {
-  const blob = new Blob([_reportText()], {type: 'text/plain;charset=utf-8'});
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement('a');
-  a.href     = url;
-  a.download = `reporte-qa-${new Date().toISOString().slice(0,10)}.txt`;
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
-// ── CASES ──────────────────────────────────────────────────────────────────────
-async function renderCases(c) {
-  c.innerHTML = `
-    <div class="editor-wrap">
-      <div class="editor-toolbar">
-        <button class="btn btn-ghost" onclick="formatCases()">{ } Formatear</button>
-        <button class="btn btn-success" onclick="saveCases()">💾 Guardar</button>
-        <span class="editor-status" id="cases-status"></span>
-      </div>
-      <div id="cases-spinner" style="position:relative">${loading('Cargando cases.json…')}</div>
-      <textarea class="code hidden" id="cases-editor" spellcheck="false"></textarea>
-    </div>`;
-  const data = await api('GET', '/api/cases');
-  document.getElementById('cases-spinner')?.remove();
-  const ta = document.getElementById('cases-editor');
-  if (ta) {
-    ta.classList.remove('hidden');
-    try { ta.value = JSON.stringify(JSON.parse(data.content), null, 2); }
-    catch { ta.value = data.content || '[]'; }
-  }
-}
-
-function formatCases() {
-  const ta = document.getElementById('cases-editor');
-  if (!ta) return;
-  try {
-    ta.value = JSON.stringify(JSON.parse(ta.value), null, 2);
-    setStatus('cases-status', '✓ Formateado', 'var(--green)');
-  } catch(e) {
-    setStatus('cases-status', '✗ JSON inválido: ' + e.message, 'var(--red)');
-  }
-}
-
-async function saveCases() {
-  const ta = document.getElementById('cases-editor');
-  if (!ta) return;
-  try {
-    JSON.parse(ta.value); // validate
-  } catch(e) {
-    setStatus('cases-status', '✗ JSON inválido', 'var(--red)');
-    return;
-  }
-  const res = await api('PUT', '/api/cases', { content: ta.value });
-  if (res.ok) setStatus('cases-status', '✓ Guardado', 'var(--green)');
-  else setStatus('cases-status', '✗ ' + (res.error||'Error'), 'var(--red)');
-}
-
-// ── RUN ──────────────────────────────────────────────────────────────────────
-
-// Lines to always show regardless of filter
-const RUN_SHOW_RE = /error|fail|exception|traceback|warning|batch|✓|✗|completado|iniciando|starting|done|finish|listo/i;
-
-let _sseLineCount = 0;
-
-function _updateSseCounter() {
-  const el = document.getElementById('run-line-count');
-  if (el) el.textContent = `${_sseLineCount} líneas recibidas`;
-}
-
-// SSE: connects and receives backlog + live lines. Called on page load and after start.
-function openSse() {
-  if (sseSource) { sseSource.close(); sseSource = null; }
-  _sseLineCount = 0;
-  _updateSseCounter();
-  sseSource = new EventSource('/api/run/stream');
-  sseSource.onmessage = e => {
-    if (e.data === 'null') return;
-    const line = JSON.parse(e.data);
-    _sseLineCount++;
-    _updateSseCounter();
-    if (RUN_SHOW_RE.test(line)) termLine(line);
-  };
-  sseSource.addEventListener('done', async () => {
-    sseSource.close(); sseSource = null;
-    const s = await api('GET', '/api/run/status');
-    if (s?.returncode === 0) {
-      termLine(`✓ Proceso finalizado OK  (${_sseLineCount} líneas procesadas)`, 'ok');
-    } else {
-      termLine(`✗ Proceso terminado  rc=${s?.returncode ?? '?'}  (${_sseLineCount} líneas procesadas)`, 'err');
-    }
-    syncRunStatus();
-  });
-  sseSource.onerror = () => { sseSource?.close(); sseSource = null; };
-}
-
-async function renderRun(c) {
-  c.innerHTML = `
-    <div class="card" style="margin-bottom:12px">
-      <div class="card-header" style="padding-bottom:12px">
-        Ejecutar
-        <span id="run-dot" style="font-size:11px;color:var(--muted);font-weight:400;margin-left:8px">–</span>
-      </div>
-      <div style="display:flex;gap:12px;flex-wrap:wrap;padding:0 4px 14px">
-        <div class="form-group" style="flex:2;min-width:160px">
-          <label>Archivo JSON</label>
-          <input id="run-json-file" value="cases.json"/>
-        </div>
-        <div class="form-group" style="flex:1;min-width:100px">
-          <label>Batch size</label>
-          <input id="run-batch-size" type="number" value="20" min="1"/>
-        </div>
-        <div class="form-group" style="flex:1;min-width:100px">
-          <label>Max workers</label>
-          <input id="run-max-workers" type="number" value="10" min="1"/>
-        </div>
-        <div class="form-group" style="flex:1;min-width:100px">
-          <label title="0 = todos">Max items <span style="color:var(--muted);font-weight:400">(0=todos)</span></label>
-          <input id="run-max-items" type="number" value="0" min="0"/>
-        </div>
-      </div>
-      <div style="display:flex;gap:10px;padding:0 4px 4px">
-        <button class="btn btn-primary" id="run-btn" onclick="startRun()" style="min-width:110px">
-          ▶ Ejecutar
-        </button>
-        <button class="btn btn-danger" id="stop-btn" onclick="stopRun()" disabled style="min-width:110px">
-          ■ Detener
-        </button>
-      </div>
-    </div>
-    <div class="card" style="flex:1;display:flex;flex-direction:column;min-height:0">
-      <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--border)">
-        <span style="font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Output</span>
-        <div style="display:flex;align-items:center;gap:10px">
-          <span id="run-line-count" style="font-size:11px;color:var(--muted)"></span>
-          <button class="btn btn-ghost" style="font-size:11px;padding:3px 10px" onclick="clearTerminal()">Limpiar</button>
-        </div>
-      </div>
-      <div class="terminal" id="terminal" style="flex:1"></div>
-    </div>`;
-
-  await syncRunStatus();
-  openSse();
-  pollTimer = setInterval(syncRunStatus, 4000);
-}
-
-// Sync button state + dot indicator from server status
-async function syncRunStatus() {
-  const s = await api('GET', '/api/run/status');
-  if (!s) return;
-
-  const dot = document.getElementById('run-dot');
-  if (dot) {
-    if (s.running) {
-      dot.innerHTML = `<span class="pulse" style="color:var(--green)">●</span> Corriendo · ${s.lines} líneas · iniciado ${fmtDate(s.started_at)}`;
-    } else if (s.returncode === 0) {
-      dot.innerHTML = `<span style="color:var(--green)">✓</span> Completado OK`;
-    } else if (s.returncode !== null) {
-      dot.innerHTML = `<span style="color:var(--red)">✗</span> Detenido (rc=${s.returncode})`;
-    } else {
-      dot.textContent = 'Sin ejecuciones recientes';
-    }
-  }
-
-  const rb = document.getElementById('run-btn');
-  const sb = document.getElementById('stop-btn');
-  if (rb) rb.disabled = s.running;
-  if (sb) sb.disabled = !s.running;
-
-  if (!s.running && sseSource) { sseSource.close(); sseSource = null; }
-}
-
-async function startRun() {
-  const jsonFile   = document.getElementById('run-json-file')?.value.trim() || 'cases.json';
-  const batchSize  = parseInt(document.getElementById('run-batch-size')?.value || '20');
-  const maxWorkers = parseInt(document.getElementById('run-max-workers')?.value || '10');
-  const maxItems   = parseInt(document.getElementById('run-max-items')?.value || '0');
-
-  const rb = document.getElementById('run-btn');
-  if (rb) rb.disabled = true;
-
-  const res = await api('POST', '/api/run', { json_file: jsonFile, batch_size: batchSize, max_workers: maxWorkers, max_items: maxItems });
-  if (res.error) {
-    termLine('ERROR: ' + res.error, 'err');
-    if (rb) rb.disabled = false;
-    return;
-  }
-
-  clearTerminal();
-  _sseLineCount = 0;
-  _updateSseCounter();
-  termLine(`▶ Iniciando  json_file=${jsonFile}  batch_size=${batchSize}  max_workers=${maxWorkers}${maxItems ? '  max_items='+maxItems : ''}`, 'info');
-  openSse();          // reconnect to get fresh stream (server resets output on start)
-  await syncRunStatus();
-}
-
-async function stopRun() {
-  const sb = document.getElementById('stop-btn');
-  if (sb) { sb.disabled = true; sb.textContent = 'Deteniendo…'; }
-
-  const res = await api('POST', '/api/run/stop', {});
-
-  if (sb) sb.textContent = '■ Detener';
-
-  if (res.error) {
-    termLine('ERROR al detener: ' + res.error, 'err');
-  } else {
-    termLine('■ Proceso terminado.', 'ok');
-  }
-
-  if (sseSource) { sseSource.close(); sseSource = null; }
-  await syncRunStatus();
-}
-
-const TERM_MAX_LINES = 500;
-let _termLineCount = 0;
-
-function termLine(text, cls = '') {
-  const t = document.getElementById('terminal');
-  if (!t) return;
-  const auto = text.includes('ERROR') || text.includes('FAIL') ? 'err'
-             : text.includes(' | OK') || text.includes('✓') || text.includes('DONE') ? 'ok'
-             : text.includes('WARNING') ? 'warn'
-             : text.includes('INFO') || text.includes('BATCH') || text.includes('Batch') ? 'info'
-             : '';
-  const div = document.createElement('div');
-  div.className = 't-line ' + (cls || auto);
-  div.textContent = text;
-  t.appendChild(div);
-  _termLineCount++;
-
-  // Prune oldest lines to keep DOM small
-  if (_termLineCount > TERM_MAX_LINES) {
-    const remove = _termLineCount - TERM_MAX_LINES;
-    for (let i = 0; i < remove; i++) {
-      if (t.firstChild) t.removeChild(t.firstChild);
-    }
-    _termLineCount = TERM_MAX_LINES;
-    // Keep a sticky banner so the user knows lines were trimmed
-    if (!t.querySelector('.t-trim-notice')) {
-      const notice = document.createElement('div');
-      notice.className = 't-trim-notice';
-      notice.style.cssText = 'color:var(--muted);font-size:10px;padding:2px 0;border-bottom:1px solid var(--border);margin-bottom:4px';
-      notice.textContent = `-- mostrando últimas ${TERM_MAX_LINES} líneas --`;
-      t.insertBefore(notice, t.firstChild);
-    }
-  }
-
-  t.scrollTop = t.scrollHeight;
-}
-
-function clearTerminal() {
-  const t = document.getElementById('terminal');
-  if (t) t.innerHTML = '';
-  _termLineCount = 0;
-}
-
-// keep old name working (used elsewhere if any)
-function addTermLine(text, cls) { termLine(text, cls); }
-
-// ── DB CLEAR ──────────────────────────────────────────────────────────────────
-function confirmClearDB() {
-  showConfirm(
-    '¿Limpiar toda la base de datos?',
-    'Se eliminarán TODOS los logs e insights. Esta acción no se puede deshacer.',
-    async () => {
-      const res = await api('DELETE', '/api/db');
-      if (res.ok) {
-        setGlobalStatus('DB limpiada', false);
-        if (currentPage === 'dashboard') refreshDashboard();
+      try {
+        this.convDetail = await this.api('GET', `/conversations/${encodeURIComponent(sid)}`);
+      } finally { this.loading = { ...this.loading, convDetail: false }; }
+    },
+    backToConvList() {
+      this.currentConvId = null;
+      this.convDetail = null;
+      this._rawStore = {};
+      if (!this.convs.length) this.loadConvs();
+    },
+    copyConversation() {
+      if (!this.convDetail) return;
+      const { messages: msgs, insight, case: caseData } = this.convDetail;
+      const lines = ['='.repeat(60), `Conversación: ${this.currentConvId}`];
+      if (msgs[0]?.run_id)            lines.push(`Run ID:    ${msgs[0].run_id}`);
+      if (msgs[0]?.user_id)           lines.push(`Usuario:   ${msgs[0].user_id}`);
+      if (msgs[0]?.scenario_group_id) lines.push(`Grupo:     ${msgs[0].scenario_group_id}`);
+      lines.push(`Mensajes:  ${msgs.length}`, '='.repeat(60), '');
+      msgs.forEach((m, i) => {
+        const camps = this.parseCampaigns(m.campaigns);
+        if (camps.length) lines.push(`[Campaña: ${camps.map(c=>c.campaign_name||c.campaign_id).join(', ')}]`);
+        lines.push(`[${i+1}] QA : ${m.message||''}`, `[${i+1}] BOT: ${m.response||''}`, '');
+      });
+      if (insight) {
+        const st = insight.complete===true?'Cumplido':insight.complete===false?'No cumplido':'Sin evaluar';
+        lines.push('-'.repeat(60), `Análisis (${st}):`, insight.analysis||'', '-'.repeat(60));
       }
-    }
-  );
-}
+      navigator.clipboard.writeText(lines.join('\n')).then(() => this.showGlobalToast('Copiado al portapapeles', 'success'));
+    },
+    async downloadExport() {
+      try {
+        const r = await fetch(`${this.apiBase}/export/conversations`, { headers: { 'X-Account-ID': this.accountId } });
+        if (!r.ok) throw new Error('Error al exportar');
+        const blob = await r.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = 'conversaciones.xlsx'; a.click();
+        URL.revokeObjectURL(url);
+      } catch(e) { this.showGlobalToast(e.message, 'error'); }
+    },
+    openRaw(n, raw) {
+      if (raw == null) return;
+      let text;
+      try { text = JSON.stringify(typeof raw === 'string' ? JSON.parse(raw) : raw, null, 2); }
+      catch { text = String(raw); }
+      this.rawModal = { show: true, title: `Turno ${n} — raw_response`, content: text };
+    },
+    parseCampaigns(val) {
+      if (!val) return [];
+      if (Array.isArray(val)) return val;
+      try { return JSON.parse(val) || []; } catch { return []; }
+    },
 
-// ── Confirm modal ──────────────────────────────────────────────────────────────
-let _confirmCb = null;
-function showConfirm(title, msg, cb) {
-  _confirmCb = cb;
-  document.getElementById('confirmTitle').textContent = title;
-  document.getElementById('confirmMsg').textContent = msg;
-  document.getElementById('confirmModal').classList.remove('hidden');
-}
-function closeConfirm() { document.getElementById('confirmModal').classList.add('hidden'); _confirmCb = null; }
-document.getElementById('confirmOkBtn').onclick = () => { const cb = _confirmCb; closeConfirm(); cb && cb(); };
+    // ── Analyses ──
+    async loadAnalyses() {
+      this.loading = { ...this.loading, analyses: true };
+      try {
+        const res = await this.api('GET', '/analyses');
+        this.analyses = (res || []).map(a => ({ ...a, _expanded: false }));
+        await nextTick();
+        this.renderCharts();
+      } finally { this.loading = { ...this.loading, analyses: false }; }
+    },
+    renderCharts() {
+      if (!this.analyses.length || typeof Chart === 'undefined') return;
+      [this._chartDonut, this._chartBars].forEach(c => { try { c?.destroy(); } catch(_){} });
 
-// ── Utils ──────────────────────────────────────────────────────────────────────
-function fmtDate(iso) {
-  if (!iso) return '–';
-  try {
-    const d = new Date(iso);
-    return d.toLocaleString('es', { dateStyle:'short', timeStyle:'short' });
-  } catch { return iso; }
-}
+      const C = {
+        ok:   { bg: 'rgba(74,222,128,.82)',  b: '#4ade80' },
+        fail: { bg: 'rgba(248,113,113,.82)', b: '#f87171' },
+        pend: { bg: 'rgba(251,191,36,.82)',  b: '#fbbf24' },
+      };
+      Chart.defaults.color = '#7c85a2';
+      Chart.defaults.borderColor = '#2e3250';
+      Chart.defaults.font.family = "'Segoe UI',system-ui,sans-serif";
+      Chart.defaults.font.size = 11;
 
-function loading(label = '') {
-  return `<div class="spinner-wrap"><div class="spinner"></div>${label ? `<span>${label}</span>` : ''}</div>`;
-}
+      const s = this.anStats;
+      const ctxD = document.getElementById('chart-donut')?.getContext('2d');
+      if (ctxD) {
+        this._chartDonut = new Chart(ctxD, {
+          type: 'doughnut',
+          data: {
+            labels: ['Cumplidos','Fallidos','Sin evaluar'],
+            datasets: [{ data: [s.ok, s.fail, s.pending], backgroundColor: [C.ok.bg,C.fail.bg,C.pend.bg], borderColor: [C.ok.b,C.fail.b,C.pend.b], borderWidth: 1.5, hoverOffset: 8 }],
+          },
+          options: {
+            responsive: true, maintainAspectRatio: false, cutout: '68%',
+            plugins: {
+              legend: { position: 'right', labels: { padding: 12, usePointStyle: true, pointStyleWidth: 8 } },
+              tooltip: { callbacks: { label: ctx => ` ${ctx.label}: ${ctx.raw} (${s.total?Math.round(ctx.raw/s.total*100):0}%)` } },
+            },
+          },
+        });
+      }
+      const ctxB = document.getElementById('chart-bars')?.getContext('2d');
+      if (ctxB && this.anGroups.length) {
+        const gs = this.anGroups;
+        this._chartBars = new Chart(ctxB, {
+          type: 'bar',
+          data: {
+            labels: gs.map(g=>g.id),
+            datasets: [
+              { label:'Cumplidos',   data:gs.map(g=>g.ok),   backgroundColor:C.ok.bg,   borderColor:C.ok.b,   borderWidth:1 },
+              { label:'Fallidos',    data:gs.map(g=>g.fail), backgroundColor:C.fail.bg, borderColor:C.fail.b, borderWidth:1 },
+              { label:'Sin evaluar', data:gs.map(g=>g.pend), backgroundColor:C.pend.bg, borderColor:C.pend.b, borderWidth:1 },
+            ],
+          },
+          options: {
+            responsive: true, maintainAspectRatio: false,
+            scales: {
+              x: { stacked: true, grid: { color:'#2e3250' }, ticks: { maxRotation:35, font:{size:10} } },
+              y: { stacked: true, grid: { color:'#2e3250' }, beginAtZero: true, ticks: { stepSize:1 } },
+            },
+            plugins: {
+              legend: { position:'top', labels: { usePointStyle:true, padding:12 } },
+              tooltip: { mode:'index', intersect:false },
+            },
+          },
+        });
+      }
+    },
 
-function escHtml(s) {
-  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
-}
+    // ── Report ──
+    _reportText() {
+      const s = this.anStats;
+      const now = new Date().toLocaleDateString('es-MX',{year:'numeric',month:'long',day:'numeric'});
+      const lines = [
+        'REPORTE EJECUTIVO QA', `Fecha: ${now}`, '='.repeat(60), '',
+        'RESUMEN GENERAL',
+        `  Total analizados : ${s.total}`,
+        `  Tasa de éxito    : ${s.pctOk}%`,
+        `  Cumplidos        : ${s.ok}`,
+        `  Fallidos         : ${s.fail}`,
+        `  Sin evaluar      : ${s.pending}`,
+        '', 'RESULTADOS POR GRUPO',
+        '  ' + 'Grupo'.padEnd(24) + 'Total  Cumplido  Fallido  Sin eval.',
+        '  ' + '-'.repeat(56),
+        ...this.anGroups.map(g => {
+          const t = g.ok+g.fail+g.pend;
+          return `  ${g.id.padEnd(24)}${String(t).padEnd(6)} ${String(g.ok).padEnd(9)} ${String(g.fail).padEnd(8)} ${g.pend}`;
+        }),
+        '', 'CASOS FALLIDOS',
+        ...this.analyses.filter(a=>a.complete===false).slice(0,20).map(a =>
+          `\n  [${(a.session_id||'?').slice(0,16)}] ${a.scenario_group_id||''} | ${a.scenario||''}\n  ${(a.analysis||'').slice(0,300)}`
+        ),
+      ];
+      return lines.join('\n');
+    },
+    copyReport() {
+      navigator.clipboard.writeText(this._reportText()).then(() => this.showGlobalToast('Reporte copiado', 'success'));
+    },
+    downloadReport() {
+      const blob = new Blob([this._reportText()], { type:'text/plain;charset=utf-8' });
+      const a = Object.assign(document.createElement('a'), { href:URL.createObjectURL(blob), download:`reporte-qa-${new Date().toISOString().slice(0,10)}.txt` });
+      a.click(); URL.revokeObjectURL(a.href);
+    },
 
-function setStatus(id, msg, color) {
-  const el = document.getElementById(id);
-  if (el) { el.textContent = msg; el.style.color = color; }
-  setTimeout(() => { if (el) el.textContent = ''; }, 4000);
-}
+    // ── Suites ──
+    async loadSuites() {
+      this.loading = { ...this.loading, suites: true };
+      try { this.suites = await this.api('GET', '/suites'); }
+      finally { this.loading = { ...this.loading, suites: false }; }
+    },
+    openSuiteDetail(s) {
+      this.currentSuite = s;
+      this.loadCases(s._id);
+    },
+    async loadCases(suiteId) {
+      this.loading = { ...this.loading, cases: true };
+      try { this.suiteCases = await this.api('GET', `/suites/${suiteId}/cases`); }
+      finally { this.loading = { ...this.loading, cases: false }; }
+    },
+    openSuiteModal(suite) {
+      this.suiteModal = { show: true, editing: suite };
+      this.suiteForm = { title: suite?.title || '', description: suite?.description || '' };
+    },
+    async saveSuite() {
+      const { title, description } = this.suiteForm;
+      if (!title.trim()) return;
+      try {
+        if (this.suiteModal.editing) {
+          await this.api('PATCH', `/suites/${this.suiteModal.editing._id}`, { title, description });
+          this.showGlobalToast('Suite actualizada', 'success');
+        } else {
+          await this.api('POST', '/suites', { title, description });
+          this.showGlobalToast('Suite creada', 'success');
+        }
+        this.suiteModal.show = false;
+        await this.loadSuites();
+      } catch(_) {}
+    },
+    confirmDeleteSuite(s) {
+      this.confirmModal = {
+        show: true,
+        title: '¿Eliminar suite?',
+        msg: `Se eliminará "${s.title}" y todos sus casos. Esta acción no se puede deshacer.`,
+        cb: async () => {
+          await this.api('DELETE', `/suites/${s._id}`);
+          this.showGlobalToast('Suite eliminada', 'success');
+          await this.loadSuites();
+        },
+      };
+    },
 
-function setGlobalStatus(msg, running = false) {
-  document.getElementById('globalStatus').textContent = msg;
-  document.getElementById('globalDot').className = 'status-dot' + (running ? '' : '');
-}
+    // ── Cases ──
+    openCaseModal(c) {
+      this.caseModal = { show: true, editing: c };
+      this.caseForm = {
+        title: c?.title || '',
+        description: c?.description || '',
+        payload: c?.payload ? JSON.stringify(c.payload, null, 2) : '{}',
+        error: '',
+      };
+    },
+    async saveCase() {
+      const { title, description, payload } = this.caseForm;
+      let parsedPayload;
+      try { parsedPayload = JSON.parse(payload); } catch(e) { this.caseForm.error = 'JSON inválido: ' + e.message; return; }
+      this.caseForm.error = '';
+      try {
+        if (this.caseModal.editing) {
+          await this.api('PATCH', `/cases/${this.caseModal.editing._id}`, { title, description, payload: parsedPayload });
+          this.showGlobalToast('Caso actualizado', 'success');
+        } else {
+          await this.api('POST', `/suites/${this.currentSuite._id}/cases`, { title, description, payload: parsedPayload });
+          this.showGlobalToast('Caso creado', 'success');
+        }
+        this.caseModal.show = false;
+        await this.loadCases(this.currentSuite._id);
+      } catch(_) {}
+    },
+    confirmDeleteCase(c) {
+      this.confirmModal = {
+        show: true,
+        title: '¿Eliminar caso?',
+        msg: `Se eliminará "${c.title}". Esta acción no se puede deshacer.`,
+        cb: async () => {
+          await this.api('DELETE', `/cases/${c._id}`);
+          this.showGlobalToast('Caso eliminado', 'success');
+          await this.loadCases(this.currentSuite._id);
+        },
+      };
+    },
+    async onUploadCases(event) {
+      const file = event.target.files[0];
+      if (!file || !this.currentSuite) return;
+      const fd = new FormData();
+      fd.append('file', file);
+      try {
+        const res = await this.apiUpload(`/suites/${this.currentSuite._id}/cases/upload?replace=true`, fd);
+        this.showGlobalToast(`${res.inserted} casos importados`, 'success');
+        await this.loadCases(this.currentSuite._id);
+      } catch(_) {}
+      event.target.value = '';
+    },
 
-// ── Boot ──────────────────────────────────────────────────────────────────────
-render();
+    // ── Runs ──
+    async loadRuns() {
+      this.loading = { ...this.loading, runs: true };
+      try {
+        const path = this.runsFilter.suite_id ? `/runs?suite_id=${this.runsFilter.suite_id}` : '/runs';
+        this.runs = await this.api('GET', path);
+        this.activeRuns = this.runs.filter(r => r.status === 'running' || r.status === 'pending').length;
+      } finally { this.loading = { ...this.loading, runs: false }; }
+    },
+    startRunsPoll() {
+      this._runsPollTimer = setInterval(() => {
+        if (this.activeRuns > 0) this.loadRuns();
+      }, 4000);
+    },
+    openRunDetail(r) {
+      this.runModal = { show: true, data: r };
+    },
+    async triggerSuiteRun(suiteId) {
+      try {
+        const res = await this.api('POST', `/runs/suite/${suiteId}`, {});
+        this.showGlobalToast(`Run iniciado: ${res.run_id?.slice(0,12)}…`, 'success');
+        this.navigate('runs');
+      } catch(_) {}
+    },
+    async triggerCaseRun(caseId) {
+      try {
+        const res = await this.api('POST', `/runs/case/${caseId}`, {});
+        this.showGlobalToast(`Run iniciado: ${res.run_id?.slice(0,12)}…`, 'success');
+        this.navigate('runs');
+      } catch(_) {}
+    },
+
+    // ── Confirm ──
+    runConfirm() {
+      this.confirmModal.show = false;
+      this.confirmModal.cb && this.confirmModal.cb();
+    },
+
+    // ── Utils ──
+    fmtDate(iso) {
+      if (!iso) return '–';
+      try { return new Date(iso).toLocaleString('es', { dateStyle:'short', timeStyle:'short' }); }
+      catch { return iso; }
+    },
+    showGlobalToast(msg, type = 'info') {
+      this.globalToast = { msg, type };
+      clearTimeout(this._gtTimer);
+      this._gtTimer = setTimeout(() => { this.globalToast = null; }, 3000);
+    },
+  },
+}).mount('#app');
 </script>
 </body>
 </html>

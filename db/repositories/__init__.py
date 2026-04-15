@@ -5,6 +5,7 @@ from db.repositories.account_repository import AccountRepository
 from db.repositories.conversation_repository import ConversationRepository
 from db.repositories.test_case_repository import TestCaseRepository
 from db.repositories.test_suite_repository import TestSuiteRepository
+from db.repositories.run_repository import RunRepository
 from db.repositories.user_repository import UserRepository
 
 __all__ = [
@@ -15,6 +16,7 @@ __all__ = [
     "ConversationRepository",
     "TestCaseRepository",
     "TestSuiteRepository",
+    "RunRepository",
     "UserRepository",
 ]
 
@@ -31,3 +33,4 @@ def setup_indexes(mongo_db) -> None:
     ConversationRepository(mongo_db["conversations"]).setup_indexes()
     TestSuiteRepository(mongo_db["test_suites"]).setup_indexes()
     TestCaseRepository(mongo_db["test_cases"]).setup_indexes()
+    RunRepository(mongo_db["runs"]).setup_indexes()

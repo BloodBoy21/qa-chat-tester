@@ -347,6 +347,7 @@ async def run_agent(
 
     item_elapsed = (datetime.datetime.now() - item_start).total_seconds()
     logger.info(f"{item_label} DONE | Duration: {fmt_duration(item_elapsed)}")
+    return final_run_id
 
 
 # ── Batch run ─────────────────────────────────────────────────────────────────

@@ -16,6 +16,10 @@ origins = os.getenv("CORS_ORIGINS", "http://localhost:3000").split(",")
 
 IS_PRODUCTION = os.getenv("ENV", "development") == "production"
 
+if not IS_PRODUCTION:
+    origins = ["*"]
+    logger.info(f"CORS origins: {origins}")
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
