@@ -1,4 +1,4 @@
-from queue.config import celery_app
+from celery_queue.config import celery_app
 from loguru import logger
 from lib.cache import get_cache
 
