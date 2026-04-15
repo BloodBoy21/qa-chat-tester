@@ -1811,16 +1811,37 @@ async function saveCases() {
 
 // ── RUN ──────────────────────────────────────────────────────────────────────
 
+// Lines to always show regardless of filter
+const RUN_SHOW_RE = /error|fail|exception|traceback|warning|batch|✓|✗|completado|iniciando|starting|done|finish|listo/i;
+
+let _sseLineCount = 0;
+
+function _updateSseCounter() {
+  const el = document.getElementById('run-line-count');
+  if (el) el.textContent = `${_sseLineCount} líneas recibidas`;
+}
+
 // SSE: connects and receives backlog + live lines. Called on page load and after start.
 function openSse() {
   if (sseSource) { sseSource.close(); sseSource = null; }
+  _sseLineCount = 0;
+  _updateSseCounter();
   sseSource = new EventSource('/api/run/stream');
   sseSource.onmessage = e => {
     if (e.data === 'null') return;
-    termLine(JSON.parse(e.data));
+    const line = JSON.parse(e.data);
+    _sseLineCount++;
+    _updateSseCounter();
+    if (RUN_SHOW_RE.test(line)) termLine(line);
   };
-  sseSource.addEventListener('done', () => {
+  sseSource.addEventListener('done', async () => {
     sseSource.close(); sseSource = null;
+    const s = await api('GET', '/api/run/status');
+    if (s?.returncode === 0) {
+      termLine(`✓ Proceso finalizado OK  (${_sseLineCount} líneas procesadas)`, 'ok');
+    } else {
+      termLine(`✗ Proceso terminado  rc=${s?.returncode ?? '?'}  (${_sseLineCount} líneas procesadas)`, 'err');
+    }
     syncRunStatus();
   });
   sseSource.onerror = () => { sseSource?.close(); sseSource = null; };
@@ -1863,7 +1884,10 @@ async function renderRun(c) {
     <div class="card" style="flex:1;display:flex;flex-direction:column;min-height:0">
       <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--border)">
         <span style="font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Output</span>
-        <button class="btn btn-ghost" style="font-size:11px;padding:3px 10px" onclick="clearTerminal()">Limpiar</button>
+        <div style="display:flex;align-items:center;gap:10px">
+          <span id="run-line-count" style="font-size:11px;color:var(--muted)"></span>
+          <button class="btn btn-ghost" style="font-size:11px;padding:3px 10px" onclick="clearTerminal()">Limpiar</button>
+        </div>
       </div>
       <div class="terminal" id="terminal" style="flex:1"></div>
     </div>`;
@@ -1916,7 +1940,9 @@ async function startRun() {
   }
 
   clearTerminal();
-  termLine(`▶ json_file=${jsonFile}  batch_size=${batchSize}  max_workers=${maxWorkers}${maxItems ? '  max_items='+maxItems : ''}`, 'info');
+  _sseLineCount = 0;
+  _updateSseCounter();
+  termLine(`▶ Iniciando  json_file=${jsonFile}  batch_size=${batchSize}  max_workers=${maxWorkers}${maxItems ? '  max_items='+maxItems : ''}`, 'info');
   openSse();          // reconnect to get fresh stream (server resets output on start)
   await syncRunStatus();
 }
