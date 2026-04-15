@@ -40,6 +40,8 @@ MAX_CHAT_ITERATIONS = int(os.getenv("MAX_CHAT_ITERATIONS", 20))
 # Prevents Gemini API rate-limit errors when batch_size is large.
 MAX_CONCURRENT_AGENTS = int(os.getenv("MAX_CONCURRENT_AGENTS", 3))
 
+DEFAULT_ACCOUNT_ID = os.getenv("DEFAULT_ACCOUNT_ID", "1")
+
 
 # ── CLI args ─────────────────────────────────────────────────────────────────
 
@@ -154,6 +156,7 @@ async def _conversation_attempt(
     run_id: str,
     item_label: str,
     attempt: int,
+    account_id: str = DEFAULT_ACCOUNT_ID,
 ) -> tuple[bool, object]:
     """
     Run one full conversation attempt.
@@ -185,7 +188,7 @@ async def _conversation_attempt(
     if not exits_run_case:
         context_obj = context if isinstance(context, dict) else json.loads(context)
         log_db.add_case(run_id=run_id, payload=context_obj)
-
+    log_db.create_conversation(run_id=run_id, account_id=account_id, user_id=user_id)
     try:
         while True:
             iteration_count += 1
@@ -243,6 +246,7 @@ async def run_agent(
     batch=None,
     item_index: int = None,
     total_items: int = None,
+    account_id: str = DEFAULT_ACCOUNT_ID,
 ):
     item_label = (
         f"[Batch {batch} | Item {item_index + 1}/{total_items}]"
@@ -269,6 +273,7 @@ async def run_agent(
                 run_id=run_id,
                 item_label=item_label,
                 attempt=attempt,
+                account_id=account_id,
             )
             final_analysis_agent = analysis_agent
         except KeyboardInterrupt:

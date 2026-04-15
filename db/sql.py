@@ -17,6 +17,7 @@ from lib.mongo import db as _mongo_db
 from db.repositories.log_repository import LogRepository
 from db.repositories.case_repository import CaseRepository
 from db.repositories.insight_repository import InsightRepository
+from db.repositories.conversation_repository import ConversationRepository
 
 _DEFAULT_ACCOUNT_ID = os.getenv("DEFAULT_ACCOUNT_ID", "default")
 
@@ -36,6 +37,7 @@ class LogDB:
         self._logs = LogRepository(_mongo_db["logs"])
         self._cases = CaseRepository(_mongo_db["cases"])
         self._insights = InsightRepository(_mongo_db["insights"])
+        self._conversations = ConversationRepository(_mongo_db["conversations"])
 
     # ── logs ──────────────────────────────────────────────────────────────────
 
@@ -113,7 +115,9 @@ class LogDB:
 
     # ── insights ──────────────────────────────────────────────────────────────
 
-    def add_insight(self, session_id, analysis, complete=False, run_id=None, account_id=None):
+    def add_insight(
+        self, session_id, analysis, complete=False, run_id=None, account_id=None
+    ):
         return self._insights.add(
             session_id=session_id,
             analysis=analysis,
@@ -142,6 +146,22 @@ class LogDB:
 
     def get_session_id_by_run_id(self, run_id):
         return self._logs.get_session_id_by_run_id(run_id)
+
+    def create_conversation(self, run_id, user_id, account_id=None):
+        return self._conversations.create_or_update(
+            account_id=account_id or _DEFAULT_ACCOUNT_ID,
+            user_id=user_id,
+            run_id=run_id,
+        )
+
+    def search_conversation(self, session_id, account_id=None):
+        return self._conversations.get_by_session(
+            session_id=session_id,
+            account_id=account_id or _DEFAULT_ACCOUNT_ID,
+        )
+
+    def search_conversation_by_run_id(self, run_id):
+        return self._conversations.get_by_run_id(run_id)
 
     # ── lifecycle ─────────────────────────────────────────────────────────────
 

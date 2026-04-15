@@ -29,14 +29,28 @@ class LogRepository(BaseMongoRepository):
         scenario_group_id: str = None,
         scenario: str = None,
     ) -> str:
-        now = self._now()
+        now = self._now_datetime()
         doc = {
             "message": message,
             "response": response,
-            "raw_response": raw_response if isinstance(raw_response, str) else json.dumps(raw_response),
-            "files": json.dumps(files) if files is not None else None,
-            "images": json.dumps(images) if images is not None else None,
-            "campaigns": json.dumps(campaigns) if campaigns is not None else None,
+            "raw_response": (
+                json.loads(raw_response)
+                if isinstance(raw_response, str)
+                else raw_response
+            ),
+            "files": (
+                files if isinstance(files, list) else json.loads(files) if files else []
+            ),
+            "images": (
+                json.loads(images)
+                if isinstance(images, str)
+                else images if images is not None else None
+            ),
+            "campaigns": (
+                json.loads(campaigns)
+                if isinstance(campaigns, str)
+                else campaigns if campaigns is not None else None
+            ),
             "user_id": user_id,
             "session_id": session_id,
             "account_id": account_id,
@@ -74,7 +88,9 @@ class LogRepository(BaseMongoRepository):
         docs = self.collection.find(query).sort("created_at", 1)
         return [self._serialize(d) for d in docs]
 
-    def get_by_user(self, user_id: str, account_id: str = None, limit: int = 50) -> list[dict]:
+    def get_by_user(
+        self, user_id: str, account_id: str = None, limit: int = 50
+    ) -> list[dict]:
         query = {"user_id": user_id}
         if account_id:
             query["account_id"] = account_id
@@ -83,9 +99,17 @@ class LogRepository(BaseMongoRepository):
 
     def update(self, log_id, **fields) -> None:
         allowed = {
-            "message", "response", "raw_response", "files", "images",
-            "campaigns", "user_id", "session_id", "run_id",
-            "scenario_group_id", "scenario",
+            "message",
+            "response",
+            "raw_response",
+            "files",
+            "images",
+            "campaigns",
+            "user_id",
+            "session_id",
+            "run_id",
+            "scenario_group_id",
+            "scenario",
         }
         to_update = {k: v for k, v in fields.items() if k in allowed}
         if not to_update:

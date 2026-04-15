@@ -12,6 +12,10 @@ class BaseMongoRepository:
         return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
     @staticmethod
+    def _now_datetime() -> datetime:
+        return datetime.now(timezone.utc)
+
+    @staticmethod
     def _serialize(doc: dict | None) -> dict | None:
         if doc is None:
             return None
