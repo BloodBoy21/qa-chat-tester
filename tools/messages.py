@@ -1,5 +1,5 @@
 from loguru import logger
-from db.sql import LogDB
+from db.log import LogDB
 
 
 def get_messages_by_session_id(

@@ -7,7 +7,7 @@ from typing import Dict
 import requests as r
 from loguru import logger
 
-from db.sql import LogDB
+from db.log import LogDB
 from utils.prompt_utils import extract_json_blocks
 
 SERVICE_URL = os.getenv("AGENT_URL", "")

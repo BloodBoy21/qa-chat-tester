@@ -14,7 +14,7 @@ from loguru import logger
 
 from agents.analysis import AnalysisAgent, AnalysisAgentManual
 from agents.user import UserAgent
-from db.sql import LogDB
+from db.log import LogDB
 from tools.common import save_analysis
 from utils.agent_runner import Agent as AgentRunner
 from utils.prompt_utils import extract_json_blocks
