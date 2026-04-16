@@ -208,8 +208,39 @@ pre.raw-pre{font-family:'JetBrains Mono','Fira Code',monospace;font-size:11.5px;
               <span v-if="convDetail.messages[0]?.user_id" class="tag">👤 {{ convDetail.messages[0].user_id }}</span>
               <span v-if="convDetail.messages[0]?.run_id" class="tag" style="font-family:monospace">run: {{ convDetail.messages[0].run_id.slice(0,12) }}…</span>
               <span class="chip chip-blue" style="margin-left:auto">{{ convDetail.messages.length }} msjs</span>
+              <!-- mark complete / fail -->
+              <button
+                v-if="!convDetail.insight || convDetail.insight.complete !== true"
+                @click="markInsight(true)"
+                :disabled="convAction.loading"
+                class="btn btn-success" style="font-size:11px;padding:4px 10px">
+                {{ convAction.loading === 'complete' ? '…' : '✓ Marcar cumplida' }}
+              </button>
+              <button
+                v-if="!convDetail.insight || convDetail.insight.complete !== false"
+                @click="markInsight(false)"
+                :disabled="convAction.loading"
+                class="btn btn-danger" style="font-size:11px;padding:4px 10px">
+                {{ convAction.loading === 'fail' ? '…' : '✗ Marcar fallida' }}
+              </button>
+              <!-- generate analysis -->
+              <button
+                @click="triggerAnalysis"
+                :disabled="convAction.loading"
+                class="btn btn-primary" style="font-size:11px;padding:4px 10px"
+                :title="convDetail.insight ? 'Regenerar análisis con IA' : 'Generar análisis con IA'">
+                {{ convAction.loading === 'analyse' ? '⏳ Generando…' : convDetail.insight ? '↻ Re-analizar' : '⚡ Generar análisis' }}
+              </button>
               <button @click="copyConversation" class="btn btn-ghost" style="font-size:11px;padding:4px 10px">Copiar</button>
             </div>
+            <!-- analysis queued banner -->
+            <transition name="fade">
+              <div v-if="convAction.queued" style="padding:8px 18px;background:rgba(108,99,255,.08);border-bottom:1px solid rgba(108,99,255,.2);font-size:12px;color:#a78bfa;display:flex;align-items:center;gap:8px;flex-shrink:0">
+                <div class="spinner sm"></div>
+                Análisis en proceso… se actualizará automáticamente cuando termine.
+                <button @click="convAction.queued=false" style="margin-left:auto;background:none;border:none;color:#7c85a2;cursor:pointer;font-size:13px">✕</button>
+              </div>
+            </transition>
             <!-- messages -->
             <div class="flex-1 overflow-y-auto" style="padding:20px 24px;display:flex;flex-direction:column;gap:0" ref="msgScroll">
               <!-- case panel -->
@@ -958,6 +989,8 @@ createApp({
       CONV_PAGE_SIZE: 20,
       convFilter: { field: 'session_id', query: '', status: 'all', objective: 'all' },
       _rawStore: {},
+      convAction: { loading: null, queued: false },  // loading: null|'complete'|'fail'|'analyse'
+      _analysisPollTimer: null,
 
       // ── Analyses ──
       analyses: [],
@@ -1234,6 +1267,7 @@ createApp({
       this.convDetail = null;
       this._rawStore = {};
       this.caseExpanded = false;
+      this.convAction = { loading: null, queued: false };
       this.loading = { ...this.loading, convDetail: true };
       if (this.page !== 'conversations') {
         this.page = 'conversations';
@@ -1243,10 +1277,13 @@ createApp({
       } finally { this.loading = { ...this.loading, convDetail: false }; }
     },
     backToConvList() {
+      clearInterval(this._analysisPollTimer);
+      this._analysisPollTimer = null;
       this.currentConvId = null;
       this.convDetail = null;
       this._rawStore = {};
       this.caseExpanded = false;
+      this.convAction = { loading: null, queued: false };
       if (!this.convs.length) this.loadConvs();
     },
     // Returns payload entries to show in the expanded case panel,
@@ -1287,6 +1324,63 @@ createApp({
         URL.revokeObjectURL(url);
       } catch(e) { this.showGlobalToast(e.message, 'error'); }
     },
+    // ── Conversation actions ──
+    async markInsight(complete) {
+      this.convAction = { ...this.convAction, loading: complete ? 'complete' : 'fail' };
+      try {
+        const updated = await this.api('PATCH', `/conversations/${this.currentConvId}/insight`, { complete });
+        // Update in-place so the UI reacts immediately without a full reload
+        if (this.convDetail) this.convDetail.insight = updated;
+        this.showGlobalToast(complete ? 'Conversación marcada como cumplida' : 'Conversación marcada como fallida', 'success');
+      } catch(_) {
+      } finally {
+        this.convAction = { ...this.convAction, loading: null };
+      }
+    },
+    async triggerAnalysis() {
+      this.convAction = { ...this.convAction, loading: 'analyse' };
+      // Snapshot the current insight's updated_at so we can detect when a NEW one arrives
+      const prevUpdatedAt = this.convDetail?.insight?.updated_at || null;
+      try {
+        await this.api('POST', `/conversations/${this.currentConvId}/analyse`, {});
+        this.convAction = { loading: null, queued: true };
+        this.showGlobalToast('Análisis iniciado — se actualizará al terminar', 'success');
+        this._startAnalysisPoll(prevUpdatedAt);
+      } catch(_) {
+        this.convAction = { ...this.convAction, loading: null };
+      }
+    },
+    _startAnalysisPoll(prevUpdatedAt) {
+      if (this._analysisPollTimer) clearInterval(this._analysisPollTimer);
+      const startedAt = Date.now();
+      this._analysisPollTimer = setInterval(async () => {
+        if (!this.currentConvId || Date.now() - startedAt > 180000) { // 3 min max
+          clearInterval(this._analysisPollTimer);
+          this.convAction = { ...this.convAction, queued: false };
+          return;
+        }
+        try {
+          const data = await this.api('GET', `/conversations/${encodeURIComponent(this.currentConvId)}`);
+          const newInsight = data?.insight;
+          // Detect a new/updated insight: either there was none before, or updated_at changed
+          const isNew = newInsight && (
+            !prevUpdatedAt ||
+            newInsight.updated_at !== prevUpdatedAt
+          );
+          if (isNew) {
+            // Full update so the whole detail re-renders correctly
+            if (this.convDetail) {
+              this.convDetail.messages = data.messages || this.convDetail.messages;
+              this.convDetail.insight = newInsight;
+            }
+            clearInterval(this._analysisPollTimer);
+            this.convAction = { loading: null, queued: false };
+            this.showGlobalToast('Análisis completado', 'success');
+          }
+        } catch(_) {}
+      }, 5000);
+    },
+
     openRaw(n, raw) {
       if (raw == null) return;
       let text;

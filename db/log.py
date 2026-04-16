@@ -10,6 +10,7 @@ For new code, import the repositories directly:
     from db.repositories import LogRepository, InsightRepository, ...
 """
 
+from asyncio.log import logger
 import os
 import threading
 
@@ -118,6 +119,13 @@ class LogDB:
     def add_insight(
         self, session_id, analysis, complete=False, run_id=None, account_id=None
     ):
+        exits_previous = self._insights.get_by_run_id(run_id, account_id=account_id)
+        if exits_previous:
+            return self._insights.update(
+                insight_id=exits_previous["_id"],
+                analysis=analysis,
+                complete=complete,
+            )
         return self._insights.add(
             session_id=session_id,
             analysis=analysis,

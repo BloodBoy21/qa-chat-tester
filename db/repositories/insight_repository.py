@@ -67,6 +67,13 @@ class InsightRepository(BaseMongoRepository):
             {"$set": to_update},
         )
 
+    def get_by_run_id(self, run_id: str, account_id: str = None) -> dict:
+        query = {"run_id": run_id}
+        if account_id:
+            query["account_id"] = account_id
+        doc = self.collection.find_one(query, sort=[("created_at", -1)])
+        return self._row_to_insight(doc)
+
     def delete(self, insight_id) -> None:
         self.collection.delete_one({"_id": self._to_object_id(insight_id)})
 
