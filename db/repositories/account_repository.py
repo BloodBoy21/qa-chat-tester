@@ -10,17 +10,18 @@ class AccountRepository(BaseMongoRepository):
         self.collection.create_index("account_id", unique=True)
         self.collection.create_index("name")
 
-    def create(self, account_id: str, name: str, **kwargs) -> str:
+    def create(self, account_id: str, name: str, description: str = None) -> dict:
         now = self._now()
         doc = {
             "account_id": account_id,
             "name": name,
+            "description": description,
             "created_at": now,
             "updated_at": now,
-            **kwargs,
         }
-        result = self.collection.insert_one(doc)
-        return str(result.inserted_id)
+        self.collection.insert_one(doc)
+        doc["_id"] = str(doc["_id"])
+        return doc
 
     def get(self, account_id: str) -> dict | None:
         doc = self.collection.find_one({"account_id": account_id})
@@ -31,7 +32,7 @@ class AccountRepository(BaseMongoRepository):
         return [self._serialize(d) for d in docs]
 
     def update(self, account_id: str, **fields) -> None:
-        allowed = {"name"}
+        allowed = {"name", "description"}
         to_update = {k: v for k, v in fields.items() if k in allowed}
         if not to_update:
             return

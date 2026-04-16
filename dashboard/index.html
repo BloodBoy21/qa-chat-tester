@@ -58,6 +58,22 @@ pre.raw-pre{font-family:'JetBrains Mono','Fira Code',monospace;font-size:11.5px;
 /* fade transition */
 .fade-enter-active,.fade-leave-active{transition:opacity .15s}
 .fade-enter-from,.fade-leave-to{opacity:0}
+/* case panel */
+.case-field-row{display:flex;gap:12px;align-items:flex-start;padding:6px 0;border-bottom:1px solid rgba(46,50,80,.5)}
+.case-field-row:last-child{border-bottom:none}
+.case-field-lbl{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#7c85a2;font-weight:600;min-width:110px;flex-shrink:0;padding-top:1px}
+.case-field-val{font-size:12px;color:#e2e8f0;line-height:1.55;flex:1;word-break:break-word}
+.case-field-val.mono{font-family:'JetBrains Mono','Fira Code',monospace;font-size:11px;color:#a78bfa}
+/* suite case row */
+.case-row{border-top:1px solid #2e3250;transition:background .12s}
+.case-row:hover{background:#22263a}
+.case-row.selected{background:rgba(108,99,255,.07);border-left:2px solid #6c63ff}
+.case-row.expanded{background:#22263a}
+.case-expand-body{background:#1a1d27;border-top:1px solid #2e3250;padding:14px 18px 14px 52px}
+/* checkbox */
+.cb{width:15px;height:15px;border-radius:4px;border:2px solid #2e3250;background:#22263a;cursor:pointer;flex-shrink:0;transition:.12s;display:flex;align-items:center;justify-content:center}
+.cb.checked{background:#6c63ff;border-color:#6c63ff}
+.cb.checked::after{content:'✓';font-size:9px;color:#fff;font-weight:700}
 </style>
 </head>
 <body class="overflow-hidden">
@@ -80,11 +96,33 @@ pre.raw-pre{font-family:'JetBrains Mono','Fira Code',monospace;font-size:11.5px;
         {{ n.label }}
       </button>
     </nav>
-    <!-- settings -->
-    <div style="border-top:1px solid #2e3250;padding:12px 16px">
-      <div class="form-label mb-1">Account ID</div>
-      <input v-model="accountId" @change="saveSettings" class="input" style="font-size:11px;padding:5px 9px" placeholder="3057"/>
-      <div class="form-label mb-1 mt-2.5">API URL</div>
+    <!-- account selector -->
+    <div style="border-top:1px solid #2e3250;padding:12px 14px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+        <span class="form-label" style="margin:0">Tenant / Account</span>
+        <button @click="openAccountModal(null)" title="Nueva cuenta"
+          style="background:none;border:1px solid #2e3250;border-radius:5px;color:#7c85a2;cursor:pointer;font-size:13px;width:22px;height:22px;display:flex;align-items:center;justify-content:center;transition:.12s;flex-shrink:0"
+          @mouseover="e=>Object.assign(e.currentTarget.style,{borderColor:'#6c63ff',color:'#6c63ff'})"
+          @mouseleave="e=>Object.assign(e.currentTarget.style,{borderColor:'#2e3250',color:'#7c85a2'})">+</button>
+      </div>
+      <!-- account select -->
+      <div style="position:relative">
+        <select v-model="accountId" @change="onAccountChange" class="select" style="width:100%;font-size:11px;padding:5px 26px 5px 9px;appearance:none">
+          <option v-if="!accounts.length" value="" disabled>Sin cuentas — crea una</option>
+          <option v-for="a in accounts" :key="a.account_id" :value="a.account_id">
+            {{ a.name }} ({{ a.account_id }})
+          </option>
+        </select>
+        <svg viewBox="0 0 24 24" fill="none" stroke="#7c85a2" stroke-width="2" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);width:12px;height:12px;pointer-events:none"><polyline points="6 9 12 15 18 9"/></svg>
+      </div>
+      <!-- selected account info -->
+      <div v-if="currentAccount" style="margin-top:6px;padding:6px 8px;background:#22263a;border-radius:6px;border:1px solid #2e3250">
+        <div style="font-size:11px;font-weight:600;color:#e2e8f0;margin-bottom:1px">{{ currentAccount.name }}</div>
+        <div v-if="currentAccount.description" style="font-size:10px;color:#7c85a2;line-height:1.4">{{ currentAccount.description }}</div>
+        <div style="font-size:10px;color:#7c85a2;margin-top:2px;font-family:monospace">id: {{ currentAccount.account_id }}</div>
+      </div>
+      <!-- api url -->
+      <div class="form-label" style="margin-top:10px;margin-bottom:4px">API URL</div>
       <input v-model="apiBase" @change="saveSettings" class="input" style="font-size:11px;padding:5px 9px" placeholder="http://localhost:8000/v1"/>
     </div>
   </aside>
@@ -175,23 +213,63 @@ pre.raw-pre{font-family:'JetBrains Mono','Fira Code',monospace;font-size:11.5px;
             <!-- messages -->
             <div class="flex-1 overflow-y-auto" style="padding:20px 24px;display:flex;flex-direction:column;gap:0" ref="msgScroll">
               <!-- case panel -->
-              <div v-if="convDetail.case" style="border-radius:10px;background:rgba(99,102,241,.05);border:1px solid rgba(99,102,241,.15);overflow:hidden;margin-bottom:12px;flex-shrink:0">
-                <div style="padding:8px 14px;display:flex;align-items:center;gap:8px;background:rgba(99,102,241,.07);border-bottom:1px solid rgba(99,102,241,.1)">
-                  <span style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#818cf8">Caso de prueba</span>
-                  <span v-if="convDetail.case.payload?.user_name" style="font-size:12px;font-weight:600">{{ convDetail.case.payload.user_name }}</span>
-                  <span v-for="c in parseCampaigns(convDetail.case.payload?.campaigns)" :key="c.campaign_id||c.campaign_name"
-                    style="font-size:10px;padding:2px 7px;border-radius:12px;background:rgba(0,212,170,.1);border:1px solid rgba(0,212,170,.25);color:#00d4aa">
-                    {{ c.campaign_name || c.campaign_id }}
-                  </span>
-                </div>
-                <div style="padding:10px 14px;font-size:12px">
-                  <div v-if="convDetail.case.payload?.prompt" style="display:flex;gap:10px;margin-bottom:6px">
-                    <span style="font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:#7c85a2;min-width:96px;flex-shrink:0">Escenario</span>
-                    <span style="white-space:pre-wrap;line-height:1.55">{{ convDetail.case.payload.prompt }}</span>
+              <div v-if="convDetail.case" style="border-radius:10px;background:rgba(99,102,241,.04);border:1px solid rgba(99,102,241,.18);overflow:hidden;margin-bottom:16px;flex-shrink:0">
+                <!-- header -->
+                <div style="padding:9px 14px;display:flex;align-items:center;gap:8px;background:rgba(99,102,241,.08);border-bottom:1px solid rgba(99,102,241,.12)">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="#818cf8" stroke-width="2" style="width:13px;height:13px;flex-shrink:0"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                  <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#818cf8">Caso de prueba</span>
+                  <!-- title from test_case doc -->
+                  <span v-if="convDetail.case.title" style="font-size:12px;font-weight:600;color:#e2e8f0">{{ convDetail.case.title }}</span>
+                  <!-- or user_name from payload -->
+                  <span v-else-if="convDetail.case.payload?.user_name" style="font-size:12px;font-weight:600;color:#e2e8f0">{{ convDetail.case.payload.user_name }}</span>
+                  <!-- campaigns -->
+                  <div style="display:flex;gap:4px;flex-wrap:wrap;margin-left:4px">
+                    <span v-for="c in parseCampaigns(convDetail.case.payload?.campaigns)" :key="c.campaign_id||c.campaign_name"
+                      style="font-size:10px;padding:1px 7px;border-radius:12px;background:rgba(0,212,170,.1);border:1px solid rgba(0,212,170,.25);color:#00d4aa">
+                      📣 {{ c.campaign_name || c.campaign_id }}
+                    </span>
                   </div>
-                  <div v-if="convDetail.case.payload?.analysisPrompt" style="display:flex;gap:10px">
-                    <span style="font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:#7c85a2;min-width:96px;flex-shrink:0">Criterio</span>
-                    <span style="color:#7c85a2">{{ convDetail.case.payload.analysisPrompt }}</span>
+                  <!-- description -->
+                  <span v-if="convDetail.case.description" style="font-size:11px;color:#7c85a2;margin-left:4px">{{ convDetail.case.description }}</span>
+                  <!-- toggle -->
+                  <button @click="caseExpanded=!caseExpanded" style="margin-left:auto;background:none;border:none;cursor:pointer;color:#818cf8;font-size:11px;font-weight:600;padding:0">
+                    {{ caseExpanded ? '▲ Ocultar' : '▼ Ver detalle' }}
+                  </button>
+                </div>
+                <!-- body — always visible: prompt + analysisPrompt -->
+                <div style="padding:10px 14px">
+                  <div v-if="convDetail.case.payload?.prompt" class="case-field-row">
+                    <span class="case-field-lbl">Escenario</span>
+                    <span class="case-field-val" style="white-space:pre-wrap">{{ convDetail.case.payload.prompt }}</span>
+                  </div>
+                  <div v-if="convDetail.case.payload?.analysisPrompt" class="case-field-row">
+                    <span class="case-field-lbl">Criterio análisis</span>
+                    <span class="case-field-val" style="color:#7c85a2">{{ convDetail.case.payload.analysisPrompt }}</span>
+                  </div>
+                  <!-- extra fields shown when expanded -->
+                  <template v-if="caseExpanded">
+                    <div v-for="[k,v] in caseExtraFields(convDetail.case)" :key="k" class="case-field-row">
+                      <span class="case-field-lbl">{{ k }}</span>
+                      <span :class="['case-field-val', typeof v==='object' ? 'mono' : '']">
+                        {{ typeof v === 'object' ? JSON.stringify(v, null, 2) : String(v) }}
+                      </span>
+                    </div>
+                    <!-- raw payload toggle -->
+                    <div style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(46,50,80,.5);display:flex;gap:8px;align-items:center">
+                      <button @click="openRaw('payload', convDetail.case.payload)"
+                        style="background:none;border:1px solid #2e3250;border-radius:6px;padding:3px 10px;font-size:11px;color:#7c85a2;cursor:pointer;transition:.12s"
+                        @mouseover="e=>e.currentTarget.style.borderColor='#6c63ff'"
+                        @mouseleave="e=>e.currentTarget.style.borderColor='#2e3250'">
+                        { } Ver payload completo
+                      </button>
+                      <span style="font-size:10px;color:#7c85a2">run_id: <span style="font-family:monospace">{{ convDetail.case.run_id || '–' }}</span></span>
+                    </div>
+                  </template>
+                  <!-- prompt-only shortcut when not expanded and no other fields shown -->
+                  <div v-if="!caseExpanded && !convDetail.case.payload?.prompt && !convDetail.case.payload?.analysisPrompt && convDetail.case.payload"
+                    class="case-field-row">
+                    <span class="case-field-lbl">Payload</span>
+                    <span class="case-field-val mono" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ JSON.stringify(convDetail.case.payload).slice(0,120) }}…</span>
                   </div>
                 </div>
               </div>
@@ -412,7 +490,7 @@ pre.raw-pre{font-family:'JetBrains Mono','Fira Code',monospace;font-size:11.5px;
         <!-- CASES LIST within suite -->
         <template v-if="currentSuite">
           <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;flex-wrap:wrap">
-            <button @click="currentSuite=null;suiteCases=[]" class="btn btn-ghost" style="font-size:12px">← Suites</button>
+            <button @click="currentSuite=null;suiteCases=[];selectedCases=[];expandedCase=null" class="btn btn-ghost" style="font-size:12px">← Suites</button>
             <div>
               <div style="font-weight:600;font-size:15px">{{ currentSuite.title }}</div>
               <div v-if="currentSuite.description" style="font-size:12px;color:#7c85a2">{{ currentSuite.description }}</div>
@@ -427,9 +505,21 @@ pre.raw-pre{font-family:'JetBrains Mono','Fira Code',monospace;font-size:11.5px;
             </div>
           </div>
           <div style="background:#1a1d27;border:1px solid #2e3250;border-radius:10px;overflow:hidden">
-            <div style="padding:12px 18px;border-bottom:1px solid #2e3250;display:flex;align-items:center;gap:8px">
+            <!-- toolbar -->
+            <div style="padding:11px 18px;border-bottom:1px solid #2e3250;display:flex;align-items:center;gap:10px;min-height:48px">
+              <!-- select-all checkbox -->
+              <div v-if="suiteCases.length" :class="['cb', selectedCases.length===suiteCases.length&&suiteCases.length>0?'checked':'']"
+                @click="toggleSelectAll" title="Seleccionar todos"></div>
               <span style="font-weight:600">Casos de prueba</span>
               <span style="font-size:12px;color:#7c85a2">{{ suiteCases.length }} casos</span>
+              <!-- bulk-delete toolbar -->
+              <transition name="fade">
+                <div v-if="selectedCases.length" style="display:flex;align-items:center;gap:8px;margin-left:4px">
+                  <span style="font-size:12px;color:#6c63ff;font-weight:600">{{ selectedCases.length }} seleccionado{{ selectedCases.length>1?'s':'' }}</span>
+                  <button @click="confirmBulkDelete" class="btn btn-danger" style="font-size:11px;padding:4px 10px">🗑 Eliminar seleccionados</button>
+                  <button @click="selectedCases=[]" class="btn btn-ghost" style="font-size:11px;padding:4px 8px">✕ Deseleccionar</button>
+                </div>
+              </transition>
               <button @click="loadCases(currentSuite._id)" class="btn btn-ghost" style="font-size:11px;padding:4px 8px;margin-left:auto">↻</button>
             </div>
             <div v-if="loading.cases" style="padding:40px;text-align:center"><div class="spinner" style="margin:0 auto"></div></div>
@@ -438,21 +528,53 @@ pre.raw-pre{font-family:'JetBrains Mono','Fira Code',monospace;font-size:11.5px;
               <div>Sin casos. Crea uno manualmente o sube un archivo JSON.</div>
             </div>
             <div v-else>
-              <div v-for="c in suiteCases" :key="c._id"
-                style="padding:13px 18px;border-top:1px solid #2e3250;display:flex;align-items:flex-start;gap:12px"
-                @mouseover="e=>{ e.currentTarget.style.background='#22263a'; e.currentTarget.querySelector('.case-actions').style.opacity='1'; }"
-                @mouseleave="e=>{ e.currentTarget.style.background='transparent'; e.currentTarget.querySelector('.case-actions').style.opacity='0'; }">
-                <div style="flex:1;min-width:0">
-                  <div style="font-weight:600;font-size:13px;margin-bottom:2px">{{ c.title }}</div>
-                  <div v-if="c.description" style="font-size:11px;color:#7c85a2;margin-bottom:4px">{{ c.description }}</div>
-                  <div style="font-family:monospace;font-size:10px;color:#7c85a2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ JSON.stringify(c.payload||{}).slice(0,140) }}…</div>
+              <template v-for="c in suiteCases" :key="c._id">
+                <!-- case row -->
+                <div :class="['case-row', selectedCases.includes(c._id)?'selected':'', expandedCase===c._id?'expanded':'']"
+                  style="padding:11px 18px;display:flex;align-items:center;gap:12px;border-left:2px solid transparent">
+                  <!-- checkbox -->
+                  <div :class="['cb', selectedCases.includes(c._id)?'checked':'']"
+                    @click.stop="toggleSelectCase(c._id)" style="margin-top:1px"></div>
+                  <!-- main info — click to expand -->
+                  <div style="flex:1;min-width:0;cursor:pointer" @click="toggleExpandCase(c._id)">
+                    <div style="display:flex;align-items:center;gap:8px">
+                      <span style="font-weight:600;font-size:13px">{{ c.title }}</span>
+                      <span v-if="c.description" style="font-size:11px;color:#7c85a2">— {{ c.description }}</span>
+                      <svg v-if="expandedCase===c._id" viewBox="0 0 24 24" fill="none" stroke="#6c63ff" stroke-width="2.5" style="width:12px;height:12px;margin-left:auto;flex-shrink:0"><polyline points="18 15 12 9 6 15"/></svg>
+                      <svg v-else viewBox="0 0 24 24" fill="none" stroke="#7c85a2" stroke-width="2.5" style="width:12px;height:12px;margin-left:auto;flex-shrink:0"><polyline points="6 9 12 15 18 9"/></svg>
+                    </div>
+                    <div style="font-family:monospace;font-size:10px;color:#7c85a2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:3px;max-width:600px">
+                      {{ JSON.stringify(c.payload||{}).slice(0,120) }}{{ JSON.stringify(c.payload||{}).length>120?'…':'' }}
+                    </div>
+                  </div>
+                  <!-- actions — always visible -->
+                  <div style="display:flex;gap:6px;flex-shrink:0">
+                    <button @click.stop="triggerCaseRun(c._id)" class="btn btn-success" style="font-size:11px;padding:4px 9px" title="Ejecutar este caso">▶</button>
+                    <button @click.stop="openCaseModal(c)" class="btn btn-ghost" style="font-size:11px;padding:4px 9px" title="Editar">✎</button>
+                    <button @click.stop="confirmDeleteCase(c)" class="btn btn-danger" style="font-size:11px;padding:4px 9px" title="Eliminar">✕</button>
+                  </div>
                 </div>
-                <div class="case-actions" style="display:flex;gap:6px;flex-shrink:0;opacity:0;transition:.15s">
-                  <button @click="triggerCaseRun(c._id)" class="btn btn-success" style="font-size:11px;padding:4px 9px">▶</button>
-                  <button @click="openCaseModal(c)" class="btn btn-ghost" style="font-size:11px;padding:4px 9px">✎</button>
-                  <button @click="confirmDeleteCase(c)" class="btn btn-danger" style="font-size:11px;padding:4px 9px">✕</button>
+                <!-- expanded detail panel -->
+                <div v-if="expandedCase===c._id" class="case-expand-body">
+                  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:0">
+                    <template v-if="c.payload && typeof c.payload==='object'">
+                      <div v-for="[k,v] in Object.entries(c.payload)" :key="k" class="case-field-row" style="padding-right:24px">
+                        <span class="case-field-lbl">{{ k }}</span>
+                        <span :class="['case-field-val', typeof v==='object'?'mono':'']"
+                          style="max-height:120px;overflow-y:auto;white-space:pre-wrap">{{ typeof v==='object' ? JSON.stringify(v,null,2) : String(v) }}</span>
+                      </div>
+                    </template>
+                    <div v-else class="case-field-row">
+                      <span class="case-field-lbl">Payload</span>
+                      <span class="case-field-val mono">{{ c.payload }}</span>
+                    </div>
+                  </div>
+                  <div style="margin-top:10px;display:flex;gap:8px">
+                    <button @click="openRaw('payload', c.payload)" class="btn btn-ghost" style="font-size:11px;padding:4px 10px">{ } Ver JSON completo</button>
+                    <span style="font-size:10px;color:#7c85a2;line-height:28px">Creado: {{ fmtDate(c.created_at) }}</span>
+                  </div>
                 </div>
-              </div>
+              </template>
             </div>
           </div>
         </template>
@@ -546,6 +668,41 @@ pre.raw-pre{font-family:'JetBrains Mono','Fira Code',monospace;font-size:11.5px;
   </div><!-- /main -->
 
   <!-- ── MODALS ──────────────────────────────────────────────────────────── -->
+
+  <!-- Account create/edit modal -->
+  <div v-if="accountModal.show" class="modal-overlay" @click.self="accountModal.show=false">
+    <div class="modal-box" style="max-width:420px">
+      <div class="modal-head">
+        <h3>{{ accountModal.editing ? 'Editar cuenta' : 'Nueva cuenta' }}</h3>
+        <button @click="accountModal.show=false" class="btn btn-ghost" style="padding:4px 10px">✕</button>
+      </div>
+      <div style="padding:20px;display:flex;flex-direction:column;gap:14px">
+        <div>
+          <label class="form-label">Account ID * <span style="font-weight:400;color:#7c85a2;text-transform:none;letter-spacing:0">(identificador único del tenant)</span></label>
+          <input v-model="accountForm.account_id" :disabled="!!accountModal.editing" class="input"
+            placeholder="3057" style="font-family:monospace"
+            @keyup.enter="saveAccount"/>
+          <p style="font-size:10px;color:#7c85a2;margin-top:3px">Este ID se usa como filtro en todas las consultas a MongoDB.</p>
+        </div>
+        <div>
+          <label class="form-label">Nombre *</label>
+          <input v-model="accountForm.name" class="input" placeholder="Acme Corp" @keyup.enter="saveAccount"/>
+        </div>
+        <div>
+          <label class="form-label">Descripción</label>
+          <textarea v-model="accountForm.description" class="input" style="height:72px;resize:none"
+            placeholder="Entorno de producción del cliente X…"></textarea>
+        </div>
+        <p v-if="accountForm.error" style="color:#f87171;font-size:11px;margin:0">{{ accountForm.error }}</p>
+      </div>
+      <div style="padding:0 20px 20px;display:flex;gap:8px;justify-content:flex-end">
+        <button @click="accountModal.show=false" class="btn btn-ghost">Cancelar</button>
+        <button @click="saveAccount" :disabled="!accountForm.account_id.trim()||!accountForm.name.trim()" class="btn btn-primary">
+          {{ accountModal.editing ? 'Guardar' : 'Crear cuenta' }}
+        </button>
+      </div>
+    </div>
+  </div>
 
   <!-- Raw response -->
   <div v-if="rawModal.show" class="modal-overlay" @click.self="rawModal.show=false">
@@ -819,12 +976,21 @@ createApp({
       suiteForm: { title: '', description: '' },
       caseModal: { show: false, editing: null },
       caseForm: { title: '', description: '', payload: '{}', error: '' },
+      selectedCases: [],   // array of _id strings
+      expandedCase: null,  // _id of the currently expanded case
+      // conversation case panel
+      caseExpanded: false,
 
       // ── Runs ──
       runs: [],
       runsFilter: { suite_id: '' },
       activeRuns: 0,
       runModal: { show: false, data: null },
+
+      // ── Accounts ──
+      accounts: [],
+      accountModal: { show: false, editing: null },
+      accountForm: { account_id: '', name: '', description: '', error: '' },
 
       // ── Modals ──
       rawModal: { show: false, title: '', content: '' },
@@ -833,6 +999,10 @@ createApp({
   },
 
   computed: {
+    currentAccount() {
+      return this.accounts.find(a => a.account_id === this.accountId) || null;
+    },
+
     // Conversations
     filteredConvs() {
       let r = this.convs;
@@ -933,6 +1103,13 @@ createApp({
   },
 
   mounted() {
+    this.loadAccounts().then(() => {
+      // If saved accountId no longer exists in accounts, pick the first one
+      if (this.accounts.length && !this.accounts.find(a => a.account_id === this.accountId)) {
+        this.accountId = this.accounts[0].account_id;
+        localStorage.setItem('qa_accountId', this.accountId);
+      }
+    });
     this.navigate('dashboard');
   },
 
@@ -942,6 +1119,50 @@ createApp({
       localStorage.setItem('qa_apiBase', this.apiBase);
       localStorage.setItem('qa_accountId', this.accountId);
       this.showGlobalToast('Configuración guardada', 'success');
+    },
+
+    // ── Accounts ──
+    async loadAccounts() {
+      try {
+        // accounts endpoint has no X-Account-ID requirement (global resource)
+        const r = await fetch(`${this.apiBase}/accounts`);
+        if (r.ok) this.accounts = await r.json();
+      } catch(_) {}
+    },
+    onAccountChange() {
+      localStorage.setItem('qa_accountId', this.accountId);
+      // refresh current page data with new account
+      this.navigate(this.page);
+    },
+    openAccountModal(account) {
+      this.accountModal = { show: true, editing: account };
+      this.accountForm = {
+        account_id: account?.account_id || '',
+        name: account?.name || '',
+        description: account?.description || '',
+        error: '',
+      };
+    },
+    async saveAccount() {
+      const { account_id, name, description } = this.accountForm;
+      if (!account_id.trim() || !name.trim()) return;
+      this.accountForm.error = '';
+      try {
+        if (this.accountModal.editing) {
+          await this.api('PATCH', `/accounts/${account_id}`, { name, description });
+          this.showGlobalToast('Cuenta actualizada', 'success');
+        } else {
+          const res = await this.api('POST', '/accounts', { account_id, name, description });
+          // auto-select the newly created account
+          this.accountId = res.account_id;
+          localStorage.setItem('qa_accountId', this.accountId);
+          this.showGlobalToast('Cuenta creada', 'success');
+        }
+        this.accountModal.show = false;
+        await this.loadAccounts();
+      } catch(e) {
+        this.accountForm.error = e.message;
+      }
     },
 
     // ── Navigation ──
@@ -1012,6 +1233,7 @@ createApp({
       this.currentConvId = sid;
       this.convDetail = null;
       this._rawStore = {};
+      this.caseExpanded = false;
       this.loading = { ...this.loading, convDetail: true };
       if (this.page !== 'conversations') {
         this.page = 'conversations';
@@ -1024,7 +1246,16 @@ createApp({
       this.currentConvId = null;
       this.convDetail = null;
       this._rawStore = {};
+      this.caseExpanded = false;
       if (!this.convs.length) this.loadConvs();
+    },
+    // Returns payload entries to show in the expanded case panel,
+    // skipping fields already displayed in the fixed rows.
+    caseExtraFields(caseDoc) {
+      const SKIP = new Set(['prompt', 'analysisPrompt', 'campaigns', 'user_name']);
+      const payload = caseDoc?.payload;
+      if (!payload || typeof payload !== 'object') return [];
+      return Object.entries(payload).filter(([k]) => !SKIP.has(k));
     },
     copyConversation() {
       if (!this.convDetail) return;
@@ -1182,6 +1413,8 @@ createApp({
     },
     openSuiteDetail(s) {
       this.currentSuite = s;
+      this.selectedCases = [];
+      this.expandedCase = null;
       this.loadCases(s._id);
     },
     async loadCases(suiteId) {
@@ -1256,6 +1489,40 @@ createApp({
         cb: async () => {
           await this.api('DELETE', `/cases/${c._id}`);
           this.showGlobalToast('Caso eliminado', 'success');
+          this.selectedCases = this.selectedCases.filter(id => id !== c._id);
+          if (this.expandedCase === c._id) this.expandedCase = null;
+          await this.loadCases(this.currentSuite._id);
+        },
+      };
+    },
+    // ── Case selection ──
+    toggleSelectCase(id) {
+      const idx = this.selectedCases.indexOf(id);
+      if (idx === -1) this.selectedCases.push(id);
+      else this.selectedCases.splice(idx, 1);
+    },
+    toggleSelectAll() {
+      if (this.selectedCases.length === this.suiteCases.length) {
+        this.selectedCases = [];
+      } else {
+        this.selectedCases = this.suiteCases.map(c => c._id);
+      }
+    },
+    toggleExpandCase(id) {
+      this.expandedCase = this.expandedCase === id ? null : id;
+    },
+    confirmBulkDelete() {
+      const count = this.selectedCases.length;
+      this.confirmModal = {
+        show: true,
+        title: `¿Eliminar ${count} caso${count > 1 ? 's' : ''}?`,
+        msg: `Se eliminarán ${count} caso${count > 1 ? 's' : ''} seleccionado${count > 1 ? 's' : ''}. Esta acción no se puede deshacer.`,
+        cb: async () => {
+          const ids = [...this.selectedCases];
+          await Promise.all(ids.map(id => this.api('DELETE', `/cases/${id}`)));
+          this.showGlobalToast(`${ids.length} caso${ids.length > 1 ? 's' : ''} eliminado${ids.length > 1 ? 's' : ''}`, 'success');
+          this.selectedCases = [];
+          this.expandedCase = null;
           await this.loadCases(this.currentSuite._id);
         },
       };
