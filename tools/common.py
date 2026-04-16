@@ -1,5 +1,6 @@
 import os
 import json
+import re
 import asyncio
 import concurrent.futures
 from typing import Dict
@@ -9,6 +10,27 @@ from loguru import logger
 
 from db.log import LogDB
 from utils.prompt_utils import extract_json_blocks
+
+
+def _recover_truncated_insights(text: str) -> str:
+    """
+    Try to extract the value of the "insights" field from a truncated JSON response.
+    Falls back to stripping code fences and returning the raw text.
+    """
+    # Pattern: find "insights": "<value>" where value may be cut off
+    match = re.search(r'"insights"\s*:\s*"(.*)', text, re.DOTALL)
+    if match:
+        raw = match.group(1)
+        # Remove a trailing incomplete escape sequence or quote
+        raw = raw.rstrip('\\"').rstrip()
+        # Remove closing JSON remnants like `"` or `}`
+        for suffix in ('",', '"', '}', ','):
+            if raw.endswith(suffix):
+                raw = raw[:-len(suffix)].rstrip()
+        return raw or text
+    # Fallback: strip markdown code fences and return plain text
+    text = re.sub(r"```(?:json)?", "", text).strip()
+    return text
 
 SERVICE_URL = os.getenv("AGENT_URL", "")
 REQUEST_TIMEOUT = int(os.getenv("REQUEST_TIMEOUT", "120"))
@@ -216,15 +238,16 @@ def save_analysis(
         try:
             analysis_dict = json.loads(analysis)
         except json.JSONDecodeError:
-            logger.warning(
-                "Analysis is not valid JSON, treating as plain text insights."
-            )
+            # Try to extract a valid JSON block embedded in the response
             extracted = extract_json_blocks(analysis)
-            logger.info(f"Extracted JSON blocks from analysis: {extracted}")
             if extracted and ("insights" in extracted or "complete" in extracted):
                 analysis_dict = extracted
+                logger.info("Extracted JSON block from response.")
             else:
-                analysis_dict = {"insights": analysis}
+                # Response may be truncated mid-JSON — try to recover the insights text
+                recovered = _recover_truncated_insights(analysis)
+                analysis_dict = {"insights": recovered}
+                logger.warning(f"Response was not valid JSON (possibly truncated). Recovered {len(recovered)} chars.")
     elif isinstance(analysis, dict):
         analysis_dict = analysis
     else:

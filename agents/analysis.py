@@ -27,7 +27,7 @@ class AnalysisAgent(AgentBase):
             # pyrefly: ignore [missing-attribute]
             description=self.description,
             generate_content_config=types.GenerateContentConfig(
-                max_output_tokens=1000,
+                max_output_tokens=8192,
                 temperature=0.5,
                 top_p=0.95,
                 top_k=40,
