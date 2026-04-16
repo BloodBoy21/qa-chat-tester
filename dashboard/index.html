@@ -74,10 +74,142 @@ pre.raw-pre{font-family:'JetBrains Mono','Fira Code',monospace;font-size:11.5px;
 .cb{width:15px;height:15px;border-radius:4px;border:2px solid #2e3250;background:#22263a;cursor:pointer;flex-shrink:0;transition:.12s;display:flex;align-items:center;justify-content:center}
 .cb.checked{background:#6c63ff;border-color:#6c63ff}
 .cb.checked::after{content:'✓';font-size:9px;color:#fff;font-weight:700}
+/* auth screens */
+.auth-wrap{display:flex;align-items:center;justify-content:center;min-height:100vh;background:#0f1117;padding:20px}
+.auth-card{background:#1a1d27;border:1px solid #2e3250;border-radius:14px;width:100%;max-width:420px;padding:36px 40px}
+.auth-logo{font-size:20px;font-weight:700;color:#6c63ff;text-align:center;margin-bottom:6px}
+.auth-logo span{color:#00d4aa}
+.auth-subtitle{text-align:center;font-size:12px;color:#7c85a2;margin-bottom:28px}
+.auth-title{font-size:17px;font-weight:700;text-align:center;margin-bottom:20px}
+.auth-field{display:flex;flex-direction:column;gap:5px;margin-bottom:14px}
+.auth-field label{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:#7c85a2;font-weight:600}
+.auth-field input{background:#22263a;border:1px solid #2e3250;color:#e2e8f0;padding:9px 12px;border-radius:8px;font-size:13px;outline:none;transition:.15s}
+.auth-field input:focus{border-color:#6c63ff}
+.auth-error{background:rgba(248,113,113,.1);border:1px solid rgba(248,113,113,.3);color:#f87171;padding:8px 12px;border-radius:7px;font-size:12px;margin-bottom:12px;line-height:1.4}
+.auth-success{background:rgba(74,222,128,.1);border:1px solid rgba(74,222,128,.3);color:#4ade80;padding:8px 12px;border-radius:7px;font-size:12px;margin-bottom:12px;line-height:1.4}
+.auth-submit{width:100%;padding:10px;border-radius:8px;border:none;background:#6c63ff;color:#fff;font-size:14px;font-weight:600;cursor:pointer;transition:.15s;margin-top:4px}
+.auth-submit:hover:not(:disabled){background:#5a52e0}
+.auth-submit:disabled{opacity:.5;cursor:not-allowed}
+.auth-link{background:none;border:none;color:#6c63ff;font-size:12px;cursor:pointer;padding:0;text-decoration:underline;text-underline-offset:2px}
+.auth-link:hover{color:#a78bfa}
+.auth-divider{text-align:center;margin-top:16px;font-size:12px;color:#7c85a2}
 </style>
 </head>
 <body class="overflow-hidden">
-<div id="app" v-cloak class="flex h-screen overflow-hidden">
+<div id="app" v-cloak>
+
+  <!-- ══════════════════ AUTH SCREENS ══════════════════ -->
+
+  <!-- LOGIN -->
+  <div v-if="authState==='login'" class="auth-wrap">
+    <div class="auth-card">
+      <div class="auth-logo">QA Chat<span>Tester</span></div>
+      <div class="auth-subtitle">Plataforma de QA para agentes de IA</div>
+      <div class="auth-title">Iniciar sesión</div>
+      <div v-if="loginForm.error" class="auth-error">{{ loginForm.error }}</div>
+      <form @submit.prevent="doLogin">
+        <div class="auth-field">
+          <label>Email</label>
+          <input v-model="loginForm.email" type="email" placeholder="admin@empresa.com" autocomplete="email" required/>
+        </div>
+        <div class="auth-field">
+          <label>Contraseña</label>
+          <input v-model="loginForm.password" type="password" placeholder="••••••••" autocomplete="current-password" required/>
+        </div>
+        <button type="submit" class="auth-submit" :disabled="loginForm.loading">
+          {{ loginForm.loading ? 'Ingresando…' : 'Ingresar' }}
+        </button>
+      </form>
+      <div class="auth-divider">
+        <button class="auth-link" @click="authState='forgot-password'">¿Olvidaste tu contraseña?</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- CHANGE PASSWORD (first login) -->
+  <div v-else-if="authState==='change-password'" class="auth-wrap">
+    <div class="auth-card">
+      <div class="auth-logo">QA Chat<span>Tester</span></div>
+      <div class="auth-subtitle" style="margin-bottom:8px">Bienvenido, {{ currentUser?.name || currentUser?.email }}</div>
+      <div class="auth-title">Crea tu contraseña</div>
+      <p style="font-size:12px;color:#7c85a2;text-align:center;margin:-10px 0 18px">Esta es tu primera sesión. Establece una contraseña segura para continuar.</p>
+      <div v-if="changePwdForm.error" class="auth-error">{{ changePwdForm.error }}</div>
+      <form @submit.prevent="doChangePassword">
+        <div class="auth-field">
+          <label>Contraseña temporal</label>
+          <input v-model="changePwdForm.current" type="password" placeholder="Contraseña recibida por email" required/>
+        </div>
+        <div class="auth-field">
+          <label>Nueva contraseña</label>
+          <input v-model="changePwdForm.newPwd" type="password" placeholder="Mínimo 8 caracteres" required/>
+        </div>
+        <div class="auth-field">
+          <label>Confirmar contraseña</label>
+          <input v-model="changePwdForm.confirm" type="password" placeholder="Repite la nueva contraseña" required/>
+        </div>
+        <button type="submit" class="auth-submit" :disabled="changePwdForm.loading">
+          {{ changePwdForm.loading ? 'Guardando…' : 'Guardar contraseña' }}
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- FORGOT PASSWORD -->
+  <div v-else-if="authState==='forgot-password'" class="auth-wrap">
+    <div class="auth-card">
+      <div class="auth-logo">QA Chat<span>Tester</span></div>
+      <div class="auth-title">Recuperar contraseña</div>
+      <div v-if="forgotForm.success" class="auth-success">{{ forgotForm.success }}</div>
+      <div v-if="forgotForm.error" class="auth-error">{{ forgotForm.error }}</div>
+      <template v-if="!forgotForm.success">
+        <p style="font-size:12px;color:#7c85a2;margin:-8px 0 18px;text-align:center">Ingresa tu email y te enviaremos un enlace para restablecer tu contraseña.</p>
+        <form @submit.prevent="doForgotPassword">
+          <div class="auth-field">
+            <label>Email</label>
+            <input v-model="forgotForm.email" type="email" placeholder="admin@empresa.com" required/>
+          </div>
+          <button type="submit" class="auth-submit" :disabled="forgotForm.loading">
+            {{ forgotForm.loading ? 'Enviando…' : 'Enviar enlace' }}
+          </button>
+        </form>
+      </template>
+      <div class="auth-divider">
+        <button class="auth-link" @click="authState='login'">← Volver al login</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- RESET PASSWORD (from email link) -->
+  <div v-else-if="authState==='reset-password'" class="auth-wrap">
+    <div class="auth-card">
+      <div class="auth-logo">QA Chat<span>Tester</span></div>
+      <div class="auth-title">Nueva contraseña</div>
+      <div v-if="resetForm.error" class="auth-error">{{ resetForm.error }}</div>
+      <div v-if="resetForm.success" class="auth-success">
+        {{ resetForm.success }}
+        <div style="margin-top:8px"><button class="auth-link" @click="authState='login'">Ir al login →</button></div>
+      </div>
+      <template v-if="!resetForm.success">
+        <form @submit.prevent="doResetPassword">
+          <div class="auth-field">
+            <label>Nueva contraseña</label>
+            <input v-model="resetForm.newPwd" type="password" placeholder="Mínimo 8 caracteres" required/>
+          </div>
+          <div class="auth-field">
+            <label>Confirmar contraseña</label>
+            <input v-model="resetForm.confirm" type="password" placeholder="Repite la nueva contraseña" required/>
+          </div>
+          <button type="submit" class="auth-submit" :disabled="resetForm.loading">
+            {{ resetForm.loading ? 'Guardando…' : 'Establecer contraseña' }}
+          </button>
+        </form>
+      </template>
+    </div>
+  </div>
+
+  <!-- ══════════════════ MAIN APP ══════════════════ -->
+  <template v-else-if="authState==='app'">
+  <div class="flex h-screen overflow-hidden">
 
   <!-- ── SIDEBAR ─────────────────────────────────────────────────────────── -->
   <aside style="width:220px;min-width:220px;background:#1a1d27;border-right:1px solid #2e3250" class="flex flex-col">
@@ -136,9 +268,11 @@ pre.raw-pre{font-family:'JetBrains Mono','Fira Code',monospace;font-size:11.5px;
             {{ toast.msg }}
           </div>
         </transition>
-        <span style="font-size:12px;color:#7c85a2">
-          <span style="width:8px;height:8px;border-radius:50%;background:#4ade80;display:inline-block;margin-right:5px"></span>Listo
+        <span style="font-size:12px;color:#7c85a2;display:flex;align-items:center;gap:6px">
+          <span style="width:8px;height:8px;border-radius:50%;background:#4ade80;display:inline-block"></span>
+          {{ currentUser?.name || currentUser?.email || 'Admin' }}
         </span>
+        <button @click="doLogout" class="btn btn-ghost" style="font-size:11px;padding:4px 10px" title="Cerrar sesión">⎋ Salir</button>
       </div>
     </header>
 
@@ -1038,6 +1172,8 @@ pre.raw-pre{font-family:'JetBrains Mono','Fira Code',monospace;font-size:11.5px;
     </div>
   </transition>
 
+  </template><!-- /app template -->
+
 </div><!-- /app -->
 
 <script>
@@ -1046,6 +1182,15 @@ const { createApp, ref, reactive, computed, watch, nextTick, onMounted } = Vue;
 createApp({
   data() {
     return {
+      // ── Auth ──
+      authState: 'login',   // login | change-password | forgot-password | reset-password | app
+      token:       localStorage.getItem('qa_token') || null,
+      currentUser: JSON.parse(localStorage.getItem('qa_user') || 'null'),
+      loginForm:    { email: '', password: '', error: '', loading: false },
+      changePwdForm:{ current: '', newPwd: '', confirm: '', error: '', loading: false },
+      forgotForm:   { email: '', error: '', success: '', loading: false },
+      resetForm:    { newPwd: '', confirm: '', error: '', success: '', loading: false, token: null },
+
       // ── Config ──
       apiBase: window.__API_BASE__ || localStorage.getItem('qa_apiBase') || 'http://localhost:8000/v1',
       accountId: localStorage.getItem('qa_accountId') || '3057',
@@ -1228,17 +1373,142 @@ createApp({
   },
 
   mounted() {
-    this.loadAccounts().then(() => {
-      // If saved accountId no longer exists in accounts, pick the first one
-      if (this.accounts.length && !this.accounts.find(a => a.account_id === this.accountId)) {
-        this.accountId = this.accounts[0].account_id;
-        localStorage.setItem('qa_accountId', this.accountId);
-      }
-    });
-    this.navigate('dashboard');
+    // 1. Check for ?reset_token=xxx in URL (from password reset email)
+    const params = new URLSearchParams(window.location.search);
+    const resetToken = params.get('reset_token');
+    if (resetToken) {
+      this.resetForm.token = resetToken;
+      this.authState = 'reset-password';
+      // Clean the token from URL without reloading
+      window.history.replaceState({}, '', window.location.pathname);
+      return;
+    }
+
+    // 2. If we have a stored token, enter the app
+    if (this.token && this.currentUser) {
+      this.authState = 'app';
+      this._initApp();
+      return;
+    }
+
+    // 3. Otherwise show login
+    this.authState = 'login';
   },
 
   methods: {
+    // ── Auth methods ──
+    _initApp() {
+      this.loadAccounts().then(() => {
+        if (this.accounts.length && !this.accounts.find(a => a.account_id === this.accountId)) {
+          this.accountId = this.accounts[0].account_id;
+          localStorage.setItem('qa_accountId', this.accountId);
+        }
+      });
+      this.navigate('dashboard');
+    },
+    _saveAuth(data) {
+      this.token = data.access_token;
+      this.currentUser = data.user;
+      localStorage.setItem('qa_token', data.access_token);
+      localStorage.setItem('qa_user', JSON.stringify(data.user));
+    },
+    doLogout() {
+      this.token = null;
+      this.currentUser = null;
+      localStorage.removeItem('qa_token');
+      localStorage.removeItem('qa_user');
+      this.authState = 'login';
+      this.loginForm = { email: '', password: '', error: '', loading: false };
+    },
+    async doLogin() {
+      this.loginForm.error = '';
+      this.loginForm.loading = true;
+      try {
+        const res = await fetch(`${this.apiBase}/auth/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: this.loginForm.email, password: this.loginForm.password }),
+        });
+        const data = await res.json();
+        if (!res.ok) { this.loginForm.error = data.detail || 'Error al iniciar sesión'; return; }
+        this._saveAuth(data);
+        if (data.must_change_password) {
+          this.changePwdForm = { current: '', newPwd: '', confirm: '', error: '', loading: false };
+          this.authState = 'change-password';
+        } else {
+          this.authState = 'app';
+          this._initApp();
+        }
+      } catch(e) {
+        this.loginForm.error = 'No se pudo conectar con la API.';
+      } finally {
+        this.loginForm.loading = false;
+      }
+    },
+    async doChangePassword() {
+      const { current, newPwd, confirm } = this.changePwdForm;
+      if (newPwd !== confirm) { this.changePwdForm.error = 'Las contraseñas no coinciden'; return; }
+      if (newPwd.length < 8)  { this.changePwdForm.error = 'Mínimo 8 caracteres'; return; }
+      this.changePwdForm.error = '';
+      this.changePwdForm.loading = true;
+      try {
+        const res = await fetch(`${this.apiBase}/auth/change-password`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${this.token}` },
+          body: JSON.stringify({ current_password: current, new_password: newPwd }),
+        });
+        const data = await res.json();
+        if (!res.ok) { this.changePwdForm.error = data.detail || 'Error'; return; }
+        this._saveAuth(data);
+        this.authState = 'app';
+        this._initApp();
+      } catch(e) {
+        this.changePwdForm.error = 'Error de conexión.';
+      } finally {
+        this.changePwdForm.loading = false;
+      }
+    },
+    async doForgotPassword() {
+      this.forgotForm.error = '';
+      this.forgotForm.success = '';
+      this.forgotForm.loading = true;
+      try {
+        const res = await fetch(`${this.apiBase}/auth/forgot-password`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: this.forgotForm.email }),
+        });
+        const data = await res.json();
+        if (!res.ok) { this.forgotForm.error = data.detail || 'Error'; return; }
+        this.forgotForm.success = data.message;
+      } catch(e) {
+        this.forgotForm.error = 'Error de conexión.';
+      } finally {
+        this.forgotForm.loading = false;
+      }
+    },
+    async doResetPassword() {
+      const { newPwd, confirm, token } = this.resetForm;
+      if (newPwd !== confirm) { this.resetForm.error = 'Las contraseñas no coinciden'; return; }
+      if (newPwd.length < 8)  { this.resetForm.error = 'Mínimo 8 caracteres'; return; }
+      this.resetForm.error = '';
+      this.resetForm.loading = true;
+      try {
+        const res = await fetch(`${this.apiBase}/auth/reset-password`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token, new_password: newPwd }),
+        });
+        const data = await res.json();
+        if (!res.ok) { this.resetForm.error = data.detail || 'Error'; return; }
+        this.resetForm.success = '¡Contraseña restablecida! Ya puedes iniciar sesión.';
+      } catch(e) {
+        this.resetForm.error = 'Error de conexión.';
+      } finally {
+        this.resetForm.loading = false;
+      }
+    },
+
     // ── Config ──
     saveSettings() {
       localStorage.setItem('qa_apiBase', this.apiBase);
@@ -1249,9 +1519,8 @@ createApp({
     // ── Accounts ──
     async loadAccounts() {
       try {
-        // accounts endpoint has no X-Account-ID requirement (global resource)
-        const r = await fetch(`${this.apiBase}/accounts`);
-        if (r.ok) this.accounts = await r.json();
+        const data = await this.api('GET', '/accounts');
+        if (Array.isArray(data)) this.accounts = data;
       } catch(_) {}
     },
     onAccountChange() {
@@ -1315,21 +1584,22 @@ createApp({
     // ── API ──
     async api(method, path, body) {
       const headers = { 'Content-Type': 'application/json', 'X-Account-ID': this.accountId };
+      if (this.token) headers['Authorization'] = `Bearer ${this.token}`;
       const opts = { method, headers };
       if (body !== undefined) opts.body = JSON.stringify(body);
       try {
         const r = await fetch(`${this.apiBase}${path}`, opts);
+        if (r.status === 401) { this.doLogout(); throw new Error('Sesión expirada. Por favor vuelve a ingresar.'); }
         if (!r.ok) { const e = await r.json().catch(()=>({detail:'Error'})); throw new Error(e.detail||r.statusText); }
         return await r.json();
       } catch(e) { this.showGlobalToast(e.message, 'error'); throw e; }
     },
     async apiUpload(path, formData) {
       try {
-        const r = await fetch(`${this.apiBase}${path}`, {
-          method: 'POST',
-          headers: { 'X-Account-ID': this.accountId },
-          body: formData,
-        });
+        const headers = { 'X-Account-ID': this.accountId };
+        if (this.token) headers['Authorization'] = `Bearer ${this.token}`;
+        const r = await fetch(`${this.apiBase}${path}`, { method: 'POST', headers, body: formData });
+        if (r.status === 401) { this.doLogout(); throw new Error('Sesión expirada.'); }
         if (!r.ok) { const e = await r.json().catch(()=>({detail:'Error'})); throw new Error(e.detail||r.statusText); }
         return await r.json();
       } catch(e) { this.showGlobalToast(e.message, 'error'); throw e; }
@@ -1427,7 +1697,7 @@ createApp({
     },
     async downloadExport() {
       try {
-        const r = await fetch(`${this.apiBase}/export/conversations`, { headers: { 'X-Account-ID': this.accountId } });
+        const r = await fetch(`${this.apiBase}/export/conversations`, { headers: { 'X-Account-ID': this.accountId, 'Authorization': `Bearer ${this.token}` } });
         if (!r.ok) throw new Error('Error al exportar');
         const blob = await r.blob();
         const url = URL.createObjectURL(blob);

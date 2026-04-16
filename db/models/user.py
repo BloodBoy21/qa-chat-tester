@@ -13,21 +13,32 @@ def _now() -> datetime:
 class User(Base):
     __tablename__ = "users"
 
-    user_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    email: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
-    password: Mapped[str] = mapped_column(String(64), nullable=False)
-    name: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_now)
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime, nullable=False, default=_now, onupdate=_now
-    )
+    user_id:              Mapped[int]      = mapped_column(Integer,     primary_key=True, autoincrement=True)
+    email:                Mapped[str]      = mapped_column(String(255), nullable=False, unique=True)
+    password:             Mapped[str]      = mapped_column(String(64),  nullable=False)
+    name:                 Mapped[str|None] = mapped_column(String(255), nullable=True)
+    created_at:           Mapped[datetime] = mapped_column(DateTime,    nullable=False, default=_now)
+    updated_at:           Mapped[datetime] = mapped_column(DateTime,    nullable=False, default=_now, onupdate=_now)
+    must_change_password: Mapped[bool]     = mapped_column(Boolean,     nullable=False, default=True)
 
     def to_dict(self) -> dict:
         return {
-            "user_id": self.user_id,
-            "email": self.email,
-            "password": self.password,
-            "name": self.name,
-            "created_at": self.created_at,
-            "updated_at": self.updated_at,
+            "user_id":              self.user_id,
+            "email":                self.email,
+            "password":             self.password,
+            "name":                 self.name,
+            "must_change_password": self.must_change_password,
+            "created_at":           self.created_at,
+            "updated_at":           self.updated_at,
+        }
+
+    def to_safe_dict(self) -> dict:
+        """Public-safe dict — no password hash."""
+        return {
+            "user_id":              self.user_id,
+            "email":                self.email,
+            "name":                 self.name,
+            "must_change_password": self.must_change_password,
+            "created_at":           self.created_at,
+            "updated_at":           self.updated_at,
         }

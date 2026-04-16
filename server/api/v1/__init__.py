@@ -1,8 +1,11 @@
 from fastapi import APIRouter
 
-from server.api.v1 import accounts, analyses, cases, conversations, export, runs, stats, suites
+from server.api.v1 import auth, accounts, analyses, cases, conversations, export, runs, stats, suites
 
 v1_router = APIRouter()
+
+# Auth is public — must be registered before the protected routes
+v1_router.include_router(auth.router)
 
 v1_router.include_router(accounts.router)
 v1_router.include_router(stats.router)

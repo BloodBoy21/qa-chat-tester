@@ -11,12 +11,14 @@ dependencies = [
     "fastapi-limiter>=0.2.0",
     "google-adk>=1.28.1",
     "loguru>=0.7.3",
+    "pyjwt>=2.12.1",
     "pymongo>=4.16.0",
     "pymysql>=1.1.0",
     "pyrefly>=0.60.0",
     "python-dotenv>=1.2.2",
     "redis>=7.4.0",
     "requests>=2.33.1",
+    "sendgrid>=6.12.5",
     "sqlalchemy>=2.0.49",
 ]
 

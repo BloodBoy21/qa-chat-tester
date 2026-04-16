@@ -11,30 +11,29 @@ from db.models.user import User
 class UserRepository:
     """
     Repository for admin users stored in SQL (MySQL or SQLite).
-    Backend is selected automatically via DATABASE_URL in lib/sql_db.
-    All users are admins — no role restrictions.
+    All users are global admins — no role or account restrictions.
     """
 
     @staticmethod
-    def _hash_password(password: str) -> str:
+    def _hash(password: str) -> str:
         salt = os.getenv("PASSWORD_SALT", "qa_chat_tester_salt_v1")
         return hashlib.sha256(f"{salt}:{password}".encode()).hexdigest()
 
-    def create(
-        self,
-        email: str,
-        password: str,
-        name: str,
-    ) -> int:
+    # ── Create ────────────────────────────────────────────────────────────────
+
+    def create(self, email: str, password: str, name: str = None) -> int:
         with get_session() as session:
             user = User(
                 email=email,
-                password=self._hash_password(password),
-                name=name if name else email.split("@")[0],
+                password=self._hash(password),
+                name=name or email.split("@")[0],
+                must_change_password=True,
             )
             session.add(user)
-            session.flush()  # populate user_id before commit
+            session.flush()
             return user.user_id
+
+    # ── Read ──────────────────────────────────────────────────────────────────
 
     def get_by_email(self, email: str) -> Optional[dict]:
         with get_session() as session:
@@ -50,14 +49,24 @@ class UserRepository:
             ).scalar_one_or_none()
             return user.to_dict() if user else None
 
+    def get_all(self) -> list[dict]:
+        with get_session() as session:
+            users = session.execute(
+                select(User).order_by(User.created_at)
+            ).scalars().all()
+            return [u.to_dict() for u in users]
+
+    # ── Validate ──────────────────────────────────────────────────────────────
+
     def validate_login(self, email: str, password: str) -> Optional[dict]:
-        """Return the user dict if credentials are valid, else None."""
         user = self.get_by_email(email)
         if not user:
             return None
-        if user["password"] == self._hash_password(password):
+        if user["password"] == self._hash(password):
             return user
         return None
+
+    # ── Update ────────────────────────────────────────────────────────────────
 
     def update(self, user_id: int, **fields) -> None:
         allowed = {"name", "email"}
@@ -74,10 +83,24 @@ class UserRepository:
         with get_session() as session:
             user = session.get(User, user_id)
             if user:
-                user.password = self._hash_password(new_password)
+                user.password = self._hash(new_password)
+
+    def clear_must_change_password(self, user_id: int) -> None:
+        with get_session() as session:
+            user = session.get(User, user_id)
+            if user:
+                user.must_change_password = False
+
+    def set_must_change_password(self, user_id: int) -> None:
+        with get_session() as session:
+            user = session.get(User, user_id)
+            if user:
+                user.must_change_password = True
+
+    # ── Delete ────────────────────────────────────────────────────────────────
 
     def deactivate(self, user_id: int) -> None:
-        """Soft-delete: set is_active = False."""
+        """Hard delete — removes the user from the database."""
         with get_session() as session:
             user = session.get(User, user_id)
             if user:
