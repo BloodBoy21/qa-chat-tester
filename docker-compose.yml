@@ -1,0 +1,136 @@
+services:
+
+  # ── Infrastructure ────────────────────────────────────────────────────────────
+
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER:-root}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:-root}
+    volumes:
+      - mongo_data:/data/db
+    ports:
+      - "27017:27017"
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  mysql:
+    image: mysql:8
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_PASSWORD:-root}
+      MYSQL_DATABASE: ${MYSQL_DB:-qa_chat_tester}
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./db/migrations/001_initial.sql:/docker-entrypoint-initdb.d/001_initial.sql:ro
+    ports:
+      - "3306:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_PASSWORD:-root}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # ── Application services ──────────────────────────────────────────────────────
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    restart: unless-stopped
+    ports:
+      - "${PORT:-8000}:8000"
+    env_file: .env
+    environment:
+      MONGO_URI: mongodb://${MONGO_USER:-root}:${MONGO_PASSWORD:-root}@mongo:27017/?authSource=admin&tls=false
+      MONGO_DB: ${MONGO_DB:-qa_chat_tester}
+      DATABASE_URL: mysql+pymysql://${MYSQL_USER:-root}:${MYSQL_PASSWORD:-root}@mysql/${MYSQL_DB:-qa_chat_tester}
+      REDIS_URI: redis://redis:6379
+      CORS_ORIGINS: ${CORS_ORIGINS:-*}
+    depends_on:
+      mongo:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      MONGO_URI: mongodb://${MONGO_USER:-root}:${MONGO_PASSWORD:-root}@mongo:27017/?authSource=admin&tls=false
+      MONGO_DB: ${MONGO_DB:-qa_chat_tester}
+      DATABASE_URL: mysql+pymysql://${MYSQL_USER:-root}:${MYSQL_PASSWORD:-root}@mysql/${MYSQL_DB:-qa_chat_tester}
+      REDIS_URI: redis://redis:6379
+      WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-1}
+    depends_on:
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile.dashboard
+    restart: unless-stopped
+    ports:
+      - "${DASHBOARD_PORT:-8765}:8765"
+    environment:
+      API_BASE_URL: ${API_BASE_URL:-http://localhost:8000/v1}
+    depends_on:
+      api:
+        condition: service_healthy
+
+  # ── CLI (run-once, not a long-lived service) ──────────────────────────────────
+  # Usage:
+  #   docker compose run --rm cli json_file=cases.json batch_size=10
+  #   docker compose run --rm cli context="Prueba rápida" user_id=123
+
+  cli:
+    build:
+      context: .
+      dockerfile: Dockerfile.cli
+    env_file: .env
+    environment:
+      MONGO_URI: mongodb://${MONGO_USER:-root}:${MONGO_PASSWORD:-root}@mongo:27017/?authSource=admin&tls=false
+      MONGO_DB: ${MONGO_DB:-qa_chat_tester}
+      DATABASE_URL: mysql+pymysql://${MYSQL_USER:-root}:${MYSQL_PASSWORD:-root}@mysql/${MYSQL_DB:-qa_chat_tester}
+    volumes:
+      - ./cases.json:/app/cases.json:ro
+    depends_on:
+      mongo:
+        condition: service_healthy
+    profiles:
+      - cli  # only started explicitly: docker compose --profile cli run cli ...
+
+volumes:
+  mongo_data:
+  mysql_data:
+  redis_data:

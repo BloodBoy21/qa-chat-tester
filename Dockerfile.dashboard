@@ -1,0 +1,15 @@
+FROM python:3.13-slim
+
+WORKDIR /app
+
+# The dashboard server uses only stdlib — no extra deps needed
+# We only install python-dotenv for env loading
+RUN pip install --no-cache-dir python-dotenv
+
+COPY dashboard/ ./dashboard/
+
+EXPOSE 8765
+
+ENV API_BASE_URL=http://api:8000/v1
+
+CMD ["python", "dashboard/server.py"]

@@ -1,358 +1,491 @@
 # QA Chat Tester
 
-Herramienta de QA automatizado para probar agentes de IA conversacionales. Simula usuarios reales usando [Google ADK](https://google.github.io/adk-docs/) con modelos Gemini, registra cada intercambio en SQLite y genera un análisis automático de cada sesión.
+Plataforma SaaS interna para QA automatizado de agentes de IA conversacionales. Simula usuarios reales con [Google ADK](https://google.github.io/adk-docs/) + Gemini, registra cada intercambio en MongoDB, genera análisis automático con IA y expone un dashboard multi-tenant para explorar resultados.
 
 ## Tabla de contenidos
 
 - [Arquitectura](#arquitectura)
-- [Requisitos](#requisitos)
-- [Instalación](#instalación)
+- [Stack](#stack)
+- [Inicio rápido con Docker](#inicio-rápido-con-docker)
+- [Instalación local](#instalación-local)
 - [Variables de entorno](#variables-de-entorno)
-- [Uso](#uso)
-  - [Ejecución simple](#ejecución-simple)
-  - [Batch paralelo — batch\_runner.py](#batch-paralelo--batch_runnerpy)
-  - [Formato de cases.json](#formato-de-casesjson)
-- [Dashboard](#dashboard)
-- [Base de datos](#base-de-datos)
-- [Estructura del proyecto](#estructura-del-proyecto)
+- [Servicios](#servicios)
+  - [API (FastAPI)](#api-fastapi)
+  - [Worker (Celery)](#worker-celery)
+  - [Dashboard](#dashboard)
+  - [CLI](#cli)
+- [Multi-tenancy](#multi-tenancy)
+- [Test Suites y casos](#test-suites-y-casos)
+- [Ejecuciones (Runs)](#ejecuciones-runs)
+- [Formato del payload de un caso](#formato-del-payload-de-un-caso)
 - [API del agente bajo prueba](#api-del-agente-bajo-prueba)
-- [Variables de entorno avanzadas](#variables-de-entorno-avanzadas)
+- [Estructura del proyecto](#estructura-del-proyecto)
+- [Variables de entorno — referencia completa](#variables-de-entorno--referencia-completa)
 
 ---
 
 ## Arquitectura
 
 ```
-batch_runner.py          → Divide cases.json en sub-batches y lanza subprocesos
-    └── main.py          → Procesa un batch; orquesta los agentes ADK
-         ├── UserAgent       → Simula al usuario: redacta y envía mensajes via HTTP
-         └── AnalysisAgent   → Analiza la conversación completa y guarda insights
-              └── AnalysisAgentManual  → Fallback sin tools cuando ADK falla
+┌─────────────┐    REST/WS    ┌──────────────────┐
+│  Dashboard  │◄─────────────►│   API (FastAPI)  │
+│  (Vue 3)    │               │   /v1/*          │
+└─────────────┘               └────────┬─────────┘
+                                       │
+                         ┌─────────────┼─────────────┐
+                         │             │             │
+                    ┌────▼───┐   ┌─────▼──┐   ┌─────▼───┐
+                    │MongoDB │   │  MySQL │   │  Redis  │
+                    │(datos) │   │(users) │   │(broker) │
+                    └────────┘   └────────┘   └────┬────┘
+                                                    │
+                                           ┌────────▼────────┐
+                                           │  Worker (Celery) │
+                                           │  run_suite / run_case │
+                                           └────────┬────────┘
+                                                    │
+                                           ┌────────▼────────┐
+                                           │  CLI (main.py)  │
+                                           │  UserAgent +    │
+                                           │  AnalysisAgent  │
+                                           └─────────────────┘
 ```
 
-### Flujo por sesión
+### Flujo de una ejecución
 
 ```
-batch_runner.py
-  │  Divide cases.json → archivos temporales por batch
-  │  Lanza N subprocesos Python (main.py) en paralelo
+POST /v1/runs/suite/{id}
   │
-main.py (por cada caso)
-  │
-  ├─ UserAgent recibe el contexto del caso
-  │   └─ Llama send_to_agent() → POST /chat → guarda en logs.db
-  │   └─ Itera hasta que la conversación termina o alcanza MAX_CHAT_ITERATIONS
-  │
-  └─ AnalysisAgent recibe el session_id
-      └─ Llama get_messages_by_session_id() → lee logs.db
-      └─ Genera análisis y llama save_analysis() → guarda en insights
+  ├─ Crea documento en runs (status: pending)
+  └─ Celery task: run_suite.delay(...)
+       │
+       ├─ Para cada test_case:
+       │   ├─ UserAgent simula al usuario → POST /chat al agente externo
+       │   │   └─ Guarda cada turno en MongoDB (logs)
+       │   └─ AnalysisAgent evalúa la conversación → guarda en MongoDB (insights)
+       │
+       └─ Actualiza runs (status: completed / stopped / failed)
 ```
 
 ---
 
-## Requisitos
+## Stack
 
-- Python >= 3.13
-- [uv](https://docs.astral.sh/uv/) (recomendado)
+| Capa | Tecnología |
+|------|-----------|
+| API | FastAPI + Uvicorn |
+| Agentes IA | Google ADK (Gemini 2.5 Flash) |
+| Base de datos operacional | MongoDB 7 |
+| Autenticación admins | MySQL 8 + SQLAlchemy |
+| Cola de tareas | Celery 5 + Redis 7 |
+| Dashboard | Vue 3 + Tailwind CSS (SPA, sin build step) |
+| Dependencias | uv + pyproject.toml |
 
 ---
 
-## Instalación
+## Inicio rápido con Docker
+
+### 1. Clonar y configurar
 
 ```bash
-# Clonar y entrar al proyecto
 git clone <repo-url>
 cd qaChatTester
-
-# Instalar dependencias con uv
-uv sync
-
-# O con pip
-pip install -e .
+cp .env.example .env   # editar con tus credenciales
 ```
 
-Crea un archivo `.env` en la raíz (ver [Variables de entorno](#variables-de-entorno)).
+### 2. Levantar todos los servicios
+
+```bash
+docker compose up -d
+```
+
+Servicios disponibles:
+
+| Servicio | URL |
+|---------|-----|
+| API | http://localhost:8000 |
+| API docs | http://localhost:8000/docs |
+| Dashboard | http://localhost:8765 |
+| MongoDB | localhost:27017 |
+| MySQL | localhost:3306 |
+| Redis | localhost:6379 |
+
+### 3. Ejecutar casos desde CLI (una vez)
+
+```bash
+# Con archivo JSON de casos
+docker compose run --rm cli json_file=cases.json batch_size=10
+
+# Caso único
+docker compose run --rm cli context="El usuario quiere cancelar su suscripción" user_id=123
+```
+
+### 4. Construir imágenes individualmente
+
+```bash
+docker build -f Dockerfile.api       -t qa-api       .
+docker build -f Dockerfile.worker    -t qa-worker     .
+docker build -f Dockerfile.dashboard -t qa-dashboard  .
+docker build -f Dockerfile.cli       -t qa-cli        .
+```
+
+---
+
+## Instalación local
+
+```bash
+# Python 3.13 requerido
+uv sync
+
+# Servicios externos requeridos
+# - MongoDB (mongodb://localhost:27017)
+# - MySQL   (localhost:3306)
+# - Redis   (localhost:6379)
+
+# Copiar y editar .env
+cp .env.example .env
+```
+
+Levantar cada servicio en terminales separadas:
+
+```bash
+# 1. API
+uv run uvicorn server.main:app --reload --port 8000
+
+# 2. Worker
+uv run celery -A celery_queue.config:celery_app worker --loglevel=info
+
+# 3. Dashboard
+python dashboard/server.py
+
+# 4. CLI (opcional, ejecución directa)
+uv run python main.py json_file=cases.json batch_size=10
+```
 
 ---
 
 ## Variables de entorno
 
-Crea `.env` en la raíz del proyecto:
+Crea `.env` en la raíz (o usa variables de entorno del sistema):
 
 ```env
-# Requeridas
+# ── Agente bajo prueba (requeridas) ──────────────────────────────────────────
 GOOGLE_API_KEY=AIzaSy...
-AGENT_URL=https://mi-agente.run.app
+GOOGLE_GENAI_USE_VERTEXAI=False
+AGENT_URL=https://tu-agente.run.app
 AGENT_TOKEN=eyJhbG...
 
-# Opcionales
+# ── Modelos ───────────────────────────────────────────────────────────────────
 MODEL_NAME=gemini-2.5-flash
-APP_NAME=qa-tester
-GOOGLE_GENAI_USE_VERTEXAI=False
+
+# ── MongoDB (datos operacionales) ─────────────────────────────────────────────
+MONGO_URI=mongodb://root:root@localhost:27017/?authSource=admin&tls=false
+MONGO_DB=qa_chat_tester
+
+# ── MySQL (autenticación de admins) ──────────────────────────────────────────
+DATABASE_URL=mysql+pymysql://root:root@localhost/qa_chat_tester
+# Alternativa: SQLite automático si no se define DATABASE_URL
+# DATABASE_URL=sqlite:///users.db
+
+# ── Redis (broker Celery) ────────────────────────────────────────────────────
+REDIS_URI=redis://localhost:6379
+
+# ── Multi-tenancy ─────────────────────────────────────────────────────────────
+DEFAULT_ACCOUNT_ID=3057
+
+# ── Dashboard ────────────────────────────────────────────────────────────────
+# URL de la API inyectada en el dashboard (variable de entorno del servidor dashboard)
+API_BASE_URL=http://localhost:8000/v1
+
+# ── Seguridad ────────────────────────────────────────────────────────────────
+PASSWORD_SALT=cambia_esto_antes_de_produccion
+CORS_ORIGINS=http://localhost:3000,http://localhost:8765
+
+# ── Comportamiento del agente ────────────────────────────────────────────────
 MAX_CHAT_ITERATIONS=20
 ITERATION_TIMEOUT=120
 ANALYSIS_TIMEOUT=120
 RUN_TIMEOUT=600
 MAX_ANALYSIS_RETRIES=3
+MAX_CONV_RETRIES=3
+MAX_CONCURRENT_AGENTS=3
 REQUEST_TIMEOUT=120
-```
 
-| Variable | Requerida | Default | Descripción |
-|---|---|---|---|
-| `GOOGLE_API_KEY` | Sí | — | API key de Google AI Studio |
-| `AGENT_URL` | Sí | — | URL base del agente bajo prueba |
-| `AGENT_TOKEN` | Sí | — | Bearer token para autenticarse con el agente |
-| `MODEL_NAME` | No | `gemini-2.5-flash` | Modelo Gemini para los agentes QA |
-| `APP_NAME` | No | `default_app_name` | Nombre de la app en ADK |
-| `GOOGLE_GENAI_USE_VERTEXAI` | No | `False` | Usar Vertex AI en lugar de AI Studio |
-| `MAX_CHAT_ITERATIONS` | No | `20` | Máximo de turnos por conversación |
-| `ITERATION_TIMEOUT` | No | `120` | Timeout por llamada al LLM (segundos) |
-| `ANALYSIS_TIMEOUT` | No | `120` | Timeout por intento de análisis (segundos) |
-| `RUN_TIMEOUT` | No | `600` | Timeout total por sesión completa (segundos) |
-| `MAX_ANALYSIS_RETRIES` | No | `3` | Reintentos del AnalysisAgent antes del fallback manual |
-| `REQUEST_TIMEOUT` | No | `120` | Timeout HTTP hacia el agente bajo prueba (segundos) |
+# ── Celery worker ────────────────────────────────────────────────────────────
+WORKER_CONCURRENCY=1
+```
 
 ---
 
-## Uso
+## Servicios
 
-### Ejecución simple
+### API (FastAPI)
 
-Prueba un único caso directamente:
+Corre en el puerto **8000**. Toda la lógica de datos se expone como REST bajo `/v1/`.
 
-```bash
-python main.py context="El usuario quiere cancelar su suscripción" user_id=12345
-```
+#### Endpoints principales
 
-Con modelo específico:
+| Método | Ruta | Descripción |
+|--------|------|-------------|
+| `GET` | `/health` | Health check |
+| `GET` | `/v1/stats` | Conteos globales del tenant |
+| `GET` | `/v1/accounts` | Lista todas las cuentas (tenants) |
+| `POST` | `/v1/accounts` | Crear nueva cuenta |
+| `GET` | `/v1/conversations` | Lista paginada de conversaciones (con filtros) |
+| `GET` | `/v1/conversations/{session_id}` | Detalle: mensajes + insight + caso |
+| `PATCH` | `/v1/conversations/{session_id}/insight` | Actualizar/crear insight manualmente |
+| `POST` | `/v1/conversations/{session_id}/analyse` | Disparar análisis IA en background |
+| `GET` | `/v1/analyses` | Lista paginada de análisis (con filtros) |
+| `GET` | `/v1/suites` | Lista paginada de test suites |
+| `POST` | `/v1/suites` | Crear suite |
+| `PATCH` | `/v1/suites/{id}` | Editar suite |
+| `DELETE` | `/v1/suites/{id}` | Eliminar suite y sus casos |
+| `GET` | `/v1/suites/{id}/cases` | Lista paginada de casos del suite |
+| `POST` | `/v1/suites/{id}/cases` | Crear caso |
+| `POST` | `/v1/suites/{id}/cases/upload` | Subir JSON masivo de casos |
+| `PATCH` | `/v1/cases/{id}` | Editar caso |
+| `DELETE` | `/v1/cases/{id}` | Eliminar caso |
+| `GET` | `/v1/runs` | Lista paginada de ejecuciones |
+| `POST` | `/v1/runs/suite/{suite_id}` | Ejecutar suite (o selección de casos) |
+| `POST` | `/v1/runs/case/{case_id}` | Ejecutar un caso individual |
+| `POST` | `/v1/runs/{run_id}/pause` | Pausar ejecución en curso |
+| `POST` | `/v1/runs/{run_id}/resume` | Reanudar ejecución pausada |
+| `POST` | `/v1/runs/{run_id}/stop` | Detener ejecución |
+| `GET` | `/v1/export/conversations` | Descargar `.xlsx` con todas las conversaciones |
 
-```bash
-python main.py context="El usuario tiene un problema con su factura" user_id=99 model=gemini-2.0-flash
-```
+**Todos los endpoints de datos requieren el header `X-Account-ID: <tenant_id>`.**
 
-Procesar un archivo JSON en modo batch dentro de `main.py`:
+#### Paginación
 
-```bash
-python main.py json_file=cases.json batch_size=5
-```
+Todos los endpoints de listado soportan:
+- `?page=1` — número de página (default: 1)
+- `?page_size=20` — ítems por página (default varía por endpoint, máx: 200)
 
-**Parámetros CLI de main.py:**
-
-| Parámetro | Default | Descripción |
-|---|---|---|
-| `context` | `"No context provided."` | Contexto/escenario del caso de prueba |
-| `user_id` | `"default_user"` | ID del usuario simulado |
-| `model` | `$MODEL_NAME` | Modelo Gemini a usar |
-| `json_file` | — | Ruta a un JSON de casos para procesar en batch |
-| `batch_size` | `10` | Conversaciones concurrentes por batch (solo con `json_file`) |
-
----
-
-### Batch paralelo — batch_runner.py
-
-Para correr múltiples casos con verdadero paralelismo (subprocesos separados):
-
-```bash
-python batch_runner.py json_file=cases.json batch_size=20 max_workers=10
-```
-
-`batch_runner.py` divide `cases.json` en chunks de `batch_size`, escribe cada chunk en un archivo temporal y lanza un subproceso `python main.py` por chunk, con hasta `max_workers` en paralelo.
-
-**Parámetros:**
-
-| Parámetro | Default | Descripción |
-|---|---|---|
-| `json_file` | — | **Requerido.** Ruta al archivo JSON de casos |
-| `batch_size` | `10` | Casos por subproceso |
-| `max_workers` | auto | Subprocesos en paralelo (default: min(batches, cpu_count)) |
-| `model` | `$MODEL_NAME` | Modelo Gemini; se reenvía a los subprocesos |
-
----
-
-### Formato de cases.json
-
-Cada elemento del array es un caso de prueba:
-
+Respuesta paginada:
 ```json
-[
-  {
-    "user_id": "58421687",
-    "objective": "Validar la tipificación de incidencias de paquetes escolares.",
-    "ScenarioGroupId": "TC005B",
-    "scenario": "Ticket – Paquetes Escolares | Director | B. Tickets SDP",
-    "evidence": "https://...",
-    "ce": "76045",
-    "prompt": "JOSÉ ANTONIO AVELAR SANDOVAL de 76045 contacta al chatbot...",
-    "analysisPrompt": "Ticket creado correctamente con tipificación Administrativo > Paquetes escolares...",
-    "campaigns": [
-      {
-        "campaign_id": "cmp-456",
-        "campaign_name": "Confirmación Paquetes Escolares Q1",
-        "whatsapp_template_name": "confirmacion_de_solicitud_de_paquetes_escolares_q1"
-      }
-    ]
-  }
-]
+{
+  "items": [...],
+  "total": 347,
+  "page": 2,
+  "page_size": 20,
+  "pages": 18
+}
 ```
 
-**Campos del caso:**
+#### Filtros de conversaciones
 
-| Campo | Requerido | Descripción |
-|---|---|---|
-| `user_id` | Sí | ID del usuario simulado |
-| `objective` | No | Objetivo de la prueba (para el análisis) |
-| `ScenarioGroupId` | No | ID de grupo de escenario (ej. `TC005B`) |
-| `scenario` | No | Nombre descriptivo del escenario |
-| `prompt` | No | Instrucciones narrativas para el `UserAgent` |
-| `analysisPrompt` | No | Criterios de éxito para el `AnalysisAgent` |
-| `evidence` | No | URL de archivo de evidencia (imagen, PDF) |
-| `ce` | No | Código de centro educativo |
-| `campaigns` | No | Campañas WhatsApp activas durante el escenario |
-| `model` | No | Override de modelo para este caso específico |
+```
+GET /v1/conversations?status=done&objective=ok&run_filter=<run_id>&search_field=user_id&search_query=123
+```
 
-El objeto completo del caso se pasa como `context` al `UserAgent` y `AnalysisAgent`.
+| Param | Valores | Descripción |
+|-------|---------|-------------|
+| `status` | `all` / `done` / `pend` | Tiene análisis o no |
+| `objective` | `all` / `ok` / `fail` | Objetivo cumplido |
+| `run_filter` | UUID | Solo conversaciones de ese run |
+| `search_field` | `session_id` / `run_id` / `user_id` / `scenario` / `scenario_group_id` | Campo a buscar |
+| `search_query` | string | Texto a buscar (regex, case-insensitive) |
+
+#### Filtros de análisis
+
+```
+GET /v1/analyses?status=fail&group=TC005B&search=paquetes
+```
+
+| Param | Valores | Descripción |
+|-------|---------|-------------|
+| `status` | `all` / `ok` / `fail` / `pending` | Estado del análisis |
+| `group` | string | Filtrar por `scenario_group_id` |
+| `search` | string | Buscar en el texto del análisis |
 
 ---
 
-## Dashboard
+### Worker (Celery)
 
-Interfaz web para monitorear ejecuciones, explorar conversaciones y gestionar `cases.json`.
+Procesa las tareas de ejecución de casos en background.
 
 ```bash
-# Desde la raíz del proyecto
+# Local
+uv run celery -A celery_queue.config:celery_app worker --loglevel=info
+
+# Con concurrencia mayor (más casos en paralelo)
+WORKER_CONCURRENCY=3 uv run celery -A celery_queue.config:celery_app worker --loglevel=info
+```
+
+**Tareas disponibles:**
+- `jobs.run_suite` — ejecuta todos (o una selección) de casos de un suite
+- `jobs.run_case` — ejecuta un caso individual
+
+El worker comprueba el estado del run en MongoDB entre cada caso para detectar si fue pausado o detenido.
+
+---
+
+### Dashboard
+
+Interfaz web Vue 3 + Tailwind que consume la API. Corre en el puerto **8765**.
+
+```bash
+# Local
 python dashboard/server.py
 
 # Puerto personalizado
 python dashboard/server.py port=9000
 ```
 
-Abre **http://localhost:8765** en el navegador.
+La URL de la API se inyecta automáticamente desde la variable de entorno `API_BASE_URL` (default: `http://localhost:8000/v1`). No hay input manual en la UI.
 
-### Funcionalidades
+#### Secciones
 
 | Sección | Descripción |
-|---|---|
-| **Dashboard** | Stats en tiempo real (sesiones, mensajes, insights, runs). Lista de conversaciones recientes con auto-refresh cada 5s. Botón para limpiar toda la DB. |
-| **Conversaciones** | Lista paginada (20 por página) de todas las sesiones. Click en una sesión para ver el timeline completo: cada turno muestra el mensaje del usuario y la respuesta del bot. Click en el número de turno para ver el `raw_response` completo en JSON. |
-| **Cases JSON** | Editor de código con validación JSON en tiempo real. Botones Formatear y Guardar. |
-| **Ejecutar** | Formulario para lanzar `batch_runner.py` con `json_file`, `batch_size` y `max_workers`. Output en tiempo real via Server-Sent Events. Botón Detener: envía SIGTERM al proceso principal y ejecuta `pkill -9 -f "main.py.*batch_runner"` para limpiar subprocesos hijos. |
-| **Exportar Excel** | Descarga un `.xlsx` con todos los mensajes, respuestas, `raw_response` (JSON formateado), análisis e insights. |
+|---------|-------------|
+| **Dashboard** | Stats globales + lista de conversaciones recientes. Auto-refresh 5s. |
+| **Conversaciones** | Lista paginada con filtros (estado, objetivo, run, búsqueda). Timeline completo de cada conversación. Click en el número de turno → raw response JSON. Chips de metadata copiables al portapapeles. Marcar como cumplida/fallida manualmente. Generar análisis con IA. |
+| **Análisis** | Lista paginada de insights con estadísticas, gráficas (distribución + por grupo) y reporte ejecutivo descargable. |
+| **Test Suites** | CRUD de suites y casos. Subir JSON masivo. Selección múltiple para ejecutar N casos específicos. Expansión inline de payload. |
+| **Ejecuciones** | Historial de runs con progreso, estado y controles de pausa/reanudación/detención. |
 
-### Endpoints del servidor
+#### Selector de tenant
 
-| Método | Ruta | Descripción |
-|---|---|---|
-| `GET` | `/` | Sirve el dashboard HTML |
-| `GET` | `/api/stats` | Conteos globales: sesiones, mensajes, insights, runs |
-| `GET` | `/api/conversations` | Lista de sesiones agrupadas con metadata |
-| `GET` | `/api/conversations/:id` | Mensajes + insight de una sesión |
-| `DELETE` | `/api/db` | Elimina todos los logs e insights |
-| `GET` | `/api/cases` | Contenido de `cases.json` |
-| `PUT` | `/api/cases` | Guarda `cases.json` |
-| `POST` | `/api/run` | Inicia `batch_runner.py` |
-| `POST` | `/api/run/stop` | Detiene el proceso activo |
-| `GET` | `/api/run/status` | Estado actual de la ejecución |
-| `GET` | `/api/run/stream` | SSE: stream de output en tiempo real |
-| `GET` | `/api/export/conversations` | Descarga `conversaciones.xlsx` |
-
-> El servidor usa solo la librería estándar de Python (stdlib), sin dependencias extra.
+En la barra lateral aparece un selector de cuenta (`X-Account-ID`). Los datos disponibles son los registrados en la colección `accounts` de MongoDB. El tenant se puede crear desde el mismo selector.
 
 ---
 
-## Base de datos
+### CLI
 
-SQLite en `logs.db`, creado automáticamente al primer uso.
+Modo de ejecución directa sin pasar por la cola de Celery. Útil para desarrollo o pruebas puntuales.
 
-### Tabla `logs`
+```bash
+# Caso único
+uv run python main.py context="El usuario quiere cancelar" user_id=12345
 
-Cada fila es un turno de conversación (un mensaje del usuario + la respuesta del bot).
+# Batch desde archivo
+uv run python main.py json_file=cases.json batch_size=5
 
-| Campo | Tipo | Descripción |
-|---|---|---|
-| `log_id` | INTEGER | PK autoincremental |
-| `message` | TEXT | Mensaje enviado al agente externo |
-| `response` | TEXT | Respuesta del agente (campo `text`) |
-| `raw_response` | TEXT | JSON completo de la respuesta (doble-codificado) |
-| `files` | TEXT | Adjuntos enviados (JSON array) |
-| `images` | TEXT | Imágenes enviadas (JSON array) |
-| `user_id` | TEXT | ID del usuario simulado |
-| `session_id` | TEXT | UUID de sesión — formato `{user_id}_{fecha}` |
-| `run_id` | TEXT | UUID de ejecución — agrupa todos los turnos de un caso |
-| `scenario_group_id` | TEXT | ID de grupo de escenario del caso |
-| `scenario` | TEXT | Nombre del escenario del caso |
-| `created_at` | TEXT | Timestamp UTC de creación |
-| `updated_at` | TEXT | Timestamp UTC de última actualización |
+# Con modelo específico
+uv run python main.py json_file=cases.json model=gemini-2.0-flash
+```
 
-### Tabla `insights`
+| Parámetro | Default | Descripción |
+|-----------|---------|-------------|
+| `context` | `"No context provided."` | Contexto/escenario del caso |
+| `user_id` | `"default_user"` | ID del usuario simulado |
+| `model` | `$MODEL_NAME` | Modelo Gemini a usar |
+| `json_file` | — | Ruta a JSON con lista de casos |
+| `batch_size` | `10` | Conversaciones concurrentes (con `json_file`) |
 
-Análisis generado por `AnalysisAgent` al finalizar cada sesión.
+---
 
-| Campo | Tipo | Descripción |
-|---|---|---|
-| `insight_id` | INTEGER | PK autoincremental |
-| `session_id` | TEXT | Sesión analizada |
-| `run_id` | TEXT | Run al que pertenece |
-| `analysis` | TEXT | Análisis en texto libre generado por el LLM |
-| `complete` | INTEGER | `1` si la conversación cumplió su objetivo, `0` si no |
-| `created_at` | TEXT | Timestamp UTC de creación |
-| `updated_at` | TEXT | Timestamp UTC de última actualización |
+## Multi-tenancy
 
-### Query principal (Export Excel)
+Cada recurso en MongoDB (logs, insights, cases, suites, runs, conversations) tiene un campo `account_id` que identifica el tenant. Todos los endpoints de la API requieren el header `X-Account-ID`.
 
-```sql
-SELECT
-  l.message,
-  l.response,
-  l.raw_response,
-  l.files,
-  l.images,
-  l.user_id,
-  i.analysis,
-  i.complete,
-  l.scenario_group_id,
-  l.scenario,
-  l.run_id
-FROM logs l
-LEFT JOIN insights i ON i.run_id = l.run_id
-WHERE l.message IS NOT NULL
-ORDER BY l.run_id;
+La colección `accounts` en MongoDB almacena los tenants conocidos:
+
+```json
+{
+  "account_id": "3057",
+  "name": "Acme Corp",
+  "description": "Entorno de producción",
+  "created_at": "...",
+  "updated_at": "..."
+}
+```
+
+Los usuarios (administradores) se almacenan en MySQL y están asociados a un `account_id`. Todos los usuarios tienen permisos de admin — no hay restricciones por rol.
+
+---
+
+## Test Suites y casos
+
+Un **Suite** es un contenedor de casos de prueba. Un **Caso** tiene título, descripción y un payload JSON que se pasa como contexto al agente simulado.
+
+### Crear suite y casos vía API
+
+```bash
+# Crear suite
+curl -X POST http://localhost:8000/v1/suites \
+  -H "X-Account-ID: 3057" \
+  -H "Content-Type: application/json" \
+  -d '{"title": "Paquetes Escolares Q1", "description": "Flujos de confirmación"}'
+
+# Subir casos masivamente desde JSON
+curl -X POST http://localhost:8000/v1/suites/{suite_id}/cases/upload?replace=true \
+  -H "X-Account-ID: 3057" \
+  -F "file=@cases.json"
 ```
 
 ---
 
-## Estructura del proyecto
+## Ejecuciones (Runs)
 
+### Disparar una ejecución
+
+```bash
+# Ejecutar todo el suite
+curl -X POST http://localhost:8000/v1/runs/suite/{suite_id} \
+  -H "X-Account-ID: 3057" \
+  -H "Content-Type: application/json" \
+  -d '{"model": "gemini-2.5-flash"}'
+
+# Ejecutar solo casos seleccionados
+curl -X POST http://localhost:8000/v1/runs/suite/{suite_id} \
+  -H "X-Account-ID: 3057" \
+  -H "Content-Type: application/json" \
+  -d '{"case_ids": ["<id1>", "<id2>"]}'
 ```
-qaChatTester/
-├── main.py                    # Punto de entrada; orquesta UserAgent + AnalysisAgent
-├── batch_runner.py            # Lanzador paralelo de subprocesos main.py
-├── cases.json                 # Casos de prueba (gitignored)
-├── logs.db                    # Base de datos SQLite (gitignored)
-├── pyproject.toml
-├── uv.lock
-│
-├── agents/
-│   ├── agent_base.py          # Clase base: model, tools, _build_tool()
-│   ├── user.py                # UserAgent — simula al usuario con send_to_agent
-│   └── analysis.py            # AnalysisAgent + AnalysisAgentManual (fallback)
-│
-├── tools/
-│   ├── common.py              # send_to_agent, save_interaction, save_analysis
-│   └── messages.py            # get_messages_by_session_id
-│
-├── utils/
-│   ├── agent_runner.py        # Wrapper sobre Google ADK Runner con InMemorySession
-│   ├── prompt_utils.py        # extract_json_blocks — parsea JSON de respuestas LLM
-│   ├── tool_utils.py          # to_snake_case
-│   └── built_in_func.py       # Funciones auxiliares internas
-│
-├── db/
-│   └── sql.py                 # LogDB — singleton SQLite thread-safe con WAL
-│
-└── dashboard/
-    ├── server.py              # Servidor HTTP stdlib: API REST + SSE
-    └── index.html             # SPA dark-mode: dashboard, conversaciones, editor, runner
+
+### Estados de un Run
+
+| Estado | Descripción |
+|--------|-------------|
+| `pending` | En cola, esperando al worker |
+| `running` | En ejecución |
+| `paused` | Pausado por el usuario (continuará después del caso actual) |
+| `stopped` | Detenido por el usuario |
+| `completed` | Todos los casos procesados |
+| `failed` | Error inesperado en el task |
+
+### Controles
+
+```bash
+curl -X POST http://localhost:8000/v1/runs/{run_id}/pause   -H "X-Account-ID: 3057"
+curl -X POST http://localhost:8000/v1/runs/{run_id}/resume  -H "X-Account-ID: 3057"
+curl -X POST http://localhost:8000/v1/runs/{run_id}/stop    -H "X-Account-ID: 3057"
 ```
+
+---
+
+## Formato del payload de un caso
+
+Cada caso puede tener cualquier estructura JSON. Los campos más usados por los agentes:
+
+```json
+{
+  "user_id": "58421687",
+  "prompt": "JOSÉ ANTONIO AVELAR SANDOVAL de 76045 contacta al chatbot para confirmar...",
+  "analysisPrompt": "El bot debe confirmar el ticket y dar número de seguimiento.",
+  "scenario": "Ticket – Paquetes Escolares | Director | B. Tickets SDP",
+  "ScenarioGroupId": "TC005B",
+  "campaigns": [
+    {
+      "campaign_id": "cmp-456",
+      "campaign_name": "Confirmación Paquetes Escolares Q1",
+      "whatsapp_template_name": "confirmacion_de_solicitud_de_paquetes_escolares_q1"
+    }
+  ]
+}
+```
+
+| Campo | Descripción |
+|-------|-------------|
+| `user_id` | ID del usuario simulado (requerido) |
+| `prompt` | Instrucciones narrativas para el `UserAgent` |
+| `analysisPrompt` | Criterio de éxito para el `AnalysisAgent` |
+| `scenario` | Nombre descriptivo del escenario |
+| `ScenarioGroupId` | Agrupación de escenarios (ej. `TC005B`) |
+| `campaigns` | Campañas WhatsApp activas durante el escenario |
+
+El objeto completo se pasa como `context` al `UserAgent` y al `AnalysisAgent`.
 
 ---
 
@@ -366,13 +499,13 @@ El agente externo debe exponer un endpoint `POST /chat`:
   "account_id": "3057",
   "user_id": "12345",
   "text": "Hola, necesito ayuda con mi paquete escolar",
-  "is_hsm": false,
-  "hsm_name": "",
   "images": [],
   "attachments": [],
   "session_id": "abc123",
-  "session_backend": "memory",
-  "persist_session": false
+  "session_backend": "redis",
+  "persist_session": true,
+  "campaigns": [],
+  "bot_message": { "text": "", "is_hsm": false, "hsm_name": "" }
 }
 ```
 
@@ -390,25 +523,117 @@ Content-Type: application/json
 }
 ```
 
-**Response completa (con traces):**
-```json
-{
-  "session_id": "abc123",
-  "text": "Hola, ¿en qué puedo ayudarte?",
-  "images": [],
-  "messages": [
-    {
-      "author": "bot",
-      "text": "Hola, ¿en qué puedo ayudarte?",
-      "images": [],
-      "metadata": { "agent": "MultiAgent", "model": "gemini/gemini-2.5-flash" }
-    }
-  ],
-  "tool_calls": [],
-  "requires_confirmation": null,
-  "metadata": {},
-  "traces": []
-}
+El campo `session_id` es obligatorio en la respuesta. El campo `text` es el que se muestra en el dashboard como respuesta del bot.
+
+---
+
+## Estructura del proyecto
+
+```
+qaChatTester/
+│
+├── main.py                    # CLI: orquesta UserAgent + AnalysisAgent
+├── batch_runner.py            # Lanzador paralelo (subprocesos main.py)
+├── pyproject.toml
+├── uv.lock
+│
+├── Dockerfile.api             # Imagen: FastAPI
+├── Dockerfile.worker          # Imagen: Celery worker
+├── Dockerfile.dashboard       # Imagen: Dashboard HTTP server
+├── Dockerfile.cli             # Imagen: CLI de ejecución
+├── docker-compose.yml         # Orquestación completa
+│
+├── server/                    # FastAPI application
+│   ├── main.py                # App, lifespan, middlewares
+│   └── api/v1/
+│       ├── accounts.py        # CRUD de tenants
+│       ├── analyses.py        # Listado paginado de insights
+│       ├── cases.py           # CRUD de casos individuales
+│       ├── conversations.py   # Listado, detalle, análisis manual
+│       ├── deps.py            # Dependency: get_account_id
+│       ├── export.py          # Descarga XLSX
+│       ├── pagination.py      # Helper make_page()
+│       ├── runs.py            # Ejecuciones + controles
+│       ├── stats.py           # Conteos globales
+│       ├── suites.py          # CRUD de suites + casos
+│       └── xlsx.py            # Builder .xlsx sin dependencias
+│
+├── celery_queue/              # Cola de tareas
+│   ├── config.py              # Instancia Celery + configuración
+│   ├── worker.py              # Entry point del worker
+│   └── jobs/
+│       └── tasks.py           # run_suite, run_case
+│
+├── agents/                    # Agentes Google ADK
+│   ├── agent_base.py          # Clase base: model, tools, _build_tool()
+│   ├── user.py                # UserAgent — simula al usuario
+│   └── analysis.py            # AnalysisAgent + AnalysisAgentManual
+│
+├── tools/                     # Herramientas de los agentes
+│   ├── common.py              # send_to_agent, save_interaction, save_analysis
+│   └── messages.py            # get_messages_by_session_id
+│
+├── lib/                       # Conexiones a servicios
+│   ├── mongo.py               # MongoDB singleton
+│   ├── sql_db.py              # SQLAlchemy (MySQL o SQLite)
+│   ├── mysql.py               # Alias → sql_db (deprecated)
+│   └── cache.py               # Redis singleton
+│
+├── db/                        # Capa de datos
+│   ├── log.py                 # LogDB: singleton db for logging (→ MongoDB)
+│   ├── models/
+│   │   └── user.py            # SQLAlchemy model: User
+│   ├── repositories/
+│   │   ├── base.py            # BaseMongoRepository
+│   │   ├── account_repository.py
+│   │   ├── case_repository.py
+│   │   ├── conversation_repository.py
+│   │   ├── insight_repository.py
+│   │   ├── log_repository.py
+│   │   ├── run_repository.py
+│   │   ├── test_case_repository.py
+│   │   ├── test_suite_repository.py
+│   │   └── user_repository.py
+│   └── migrations/
+│       └── 001_initial.sql    # Schema MySQL (referencia; SQLAlchemy lo crea auto)
+│
+├── utils/
+│   ├── agent_runner.py        # Wrapper sobre Google ADK Runner
+│   ├── prompt_utils.py        # extract_json_blocks
+│   ├── tool_utils.py          # to_snake_case
+│   └── built_in_func.py       # Auxiliares internos
+│
+└── dashboard/
+    ├── server.py              # HTTP server stdlib: sirve index.html + inyecta API_BASE_URL
+    └── index.html             # SPA: Vue 3 + Tailwind + Chart.js
 ```
 
-El campo `session_id` es obligatorio en la respuesta: `UserAgent` lo extrae y lo mantiene consistente a lo largo de toda la conversación. El campo `text` es el que se muestra en el dashboard como "respuesta del bot".
+---
+
+## Variables de entorno — referencia completa
+
+| Variable | Requerida | Default | Descripción |
+|----------|-----------|---------|-------------|
+| `GOOGLE_API_KEY` | Sí | — | API key de Google AI Studio |
+| `GOOGLE_GENAI_USE_VERTEXAI` | No | `False` | Usar Vertex AI en lugar de AI Studio |
+| `AGENT_URL` | Sí | — | URL base del agente bajo prueba |
+| `AGENT_TOKEN` | Sí | — | Bearer token del agente |
+| `MODEL_NAME` | No | `gemini-2.5-flash` | Modelo Gemini para los agentes QA |
+| `MONGO_URI` | Sí | — | URI de conexión a MongoDB |
+| `MONGO_DB` | No | `qa_chat_tester` | Nombre de la base de datos en MongoDB |
+| `DATABASE_URL` | No | `sqlite:///users.db` | URL SQLAlchemy para MySQL (o SQLite) |
+| `REDIS_URI` | No | `redis://localhost:6379` | URI de Redis (broker Celery) |
+| `DEFAULT_ACCOUNT_ID` | No | `default` | Tenant por defecto cuando no se pasa `account_id` |
+| `API_BASE_URL` | No | `http://localhost:8000/v1` | URL de la API inyectada en el dashboard |
+| `PASSWORD_SALT` | No | `qa_chat_tester_salt_v1` | Salt para hash SHA-256 de contraseñas |
+| `CORS_ORIGINS` | No | `http://localhost:3000` | Orígenes CORS permitidos (coma-separados) |
+| `PORT` | No | `8000` | Puerto de la API |
+| `WORKER_CONCURRENCY` | No | `1` | Workers concurrentes en Celery |
+| `MAX_CHAT_ITERATIONS` | No | `20` | Máximo de turnos por conversación |
+| `ITERATION_TIMEOUT` | No | `120` | Timeout por llamada al LLM (segundos) |
+| `ANALYSIS_TIMEOUT` | No | `120` | Timeout por intento de análisis (segundos) |
+| `RUN_TIMEOUT` | No | `600` | Timeout total por sesión (segundos) |
+| `MAX_ANALYSIS_RETRIES` | No | `3` | Reintentos del AnalysisAgent |
+| `MAX_CONV_RETRIES` | No | `3` | Reintentos de conversación si no genera mensajes |
+| `MAX_CONCURRENT_AGENTS` | No | `3` | Agentes concurrentes dentro de un proceso |
+| `REQUEST_TIMEOUT` | No | `120` | Timeout HTTP hacia el agente externo (segundos) |

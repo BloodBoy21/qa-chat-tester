@@ -1,0 +1,31 @@
+FROM python:3.13-slim
+
+WORKDIR /app
+
+# System deps (certifi CA bundle is handled by the package itself)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install uv for fast dependency resolution
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+
+# Copy dependency files first for layer caching
+COPY pyproject.toml uv.lock ./
+
+# Install dependencies into the system Python (no virtualenv needed in containers)
+RUN uv sync --frozen --no-dev
+
+# Copy application code
+COPY agents/     ./agents/
+COPY celery_queue/ ./celery_queue/
+COPY db/         ./db/
+COPY lib/        ./lib/
+COPY server/     ./server/
+COPY tools/      ./tools/
+COPY utils/      ./utils/
+COPY main.py     ./
+
+EXPOSE 8000
+
+CMD ["uv", "run", "uvicorn", "server.main:app", "--host", "0.0.0.0", "--port", "8000"]

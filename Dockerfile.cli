@@ -1,0 +1,26 @@
+FROM python:3.13-slim
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-dev
+
+COPY agents/       ./agents/
+COPY celery_queue/ ./celery_queue/
+COPY db/           ./db/
+COPY lib/          ./lib/
+COPY tools/        ./tools/
+COPY utils/        ./utils/
+COPY batch_runner.py ./
+COPY main.py         ./
+
+# Mount cases.json at runtime:
+#   docker run --rm -v $(pwd)/cases.json:/app/cases.json qa-cli \
+#     json_file=cases.json batch_size=10
+ENTRYPOINT ["uv", "run", "python", "main.py"]
