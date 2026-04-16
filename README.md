@@ -15,6 +15,7 @@ Plataforma SaaS interna para QA automatizado de agentes de IA conversacionales. 
   - [Escalado para alta carga (500+ conv/h)](#escalado-para-alta-carga-500-conversacioneshora)
   - [Dashboard](#dashboard)
   - [CLI](#cli)
+- [Documentación de la API (Apidog)](#documentación-de-la-api-apidog)
 - [Multi-tenancy](#multi-tenancy)
 - [Test Suites y casos](#test-suites-y-casos)
 - [Ejecuciones (Runs)](#ejecuciones-runs)
@@ -476,6 +477,61 @@ uv run python main.py json_file=cases.json model=gemini-2.0-flash
 | `model` | `$MODEL_NAME` | Modelo Gemini a usar |
 | `json_file` | — | Ruta a JSON con lista de casos |
 | `batch_size` | `10` | Conversaciones concurrentes (con `json_file`) |
+
+---
+
+## Documentación de la API (Apidog)
+
+El spec OpenAPI 3.0 se genera automáticamente desde el código de FastAPI.
+
+### Importar en Apidog
+
+1. Ejecuta el script de exportación:
+   ```bash
+   uv run python scripts/export_openapi.py
+   ```
+2. Abre **Apidog** → **Import** → **OpenAPI / Swagger**
+3. Selecciona `docs/openapi.json`
+4. Configura las variables de entorno en Apidog:
+
+   | Variable | Valor |
+   |----------|-------|
+   | `baseUrl` | `http://localhost:8000` |
+   | `token`   | *(obtener con POST /v1/auth/login)* |
+   | `accountId` | `3057` *(o tu account_id)* |
+
+5. En la colección importada, configura la autenticación global:
+   - **Auth type**: Bearer Token
+   - **Token**: `{{token}}`
+
+### Regenerar el spec
+
+El script `scripts/export_openapi.py` lee el código de FastAPI y genera una spec enriquecida con:
+- Seguridad Bearer JWT en todos los endpoints protegidos
+- Header `X-Account-ID` en todos los endpoints de datos
+- Ejemplos en request bodies
+- Parámetros de paginación y filtros documentados
+- Schemas de respuesta para todos los recursos
+
+```bash
+# Regenerar después de cambios en la API
+uv run python scripts/export_openapi.py
+# → docs/openapi.json  (importar en Apidog)
+# → docs/openapi.yaml  (versión legible)
+```
+
+### Flujo de autenticación en Apidog
+
+```
+1. POST /v1/auth/login
+   Body: { "email": "admin@empresa.com", "password": "..." }
+   → Copia el access_token de la respuesta
+
+2. Configura la variable {{token}} en tu environment de Apidog
+
+3. Todos los demás requests usarán Authorization: Bearer {{token}}
+   y X-Account-ID: {{accountId}} automáticamente
+```
 
 ---
 

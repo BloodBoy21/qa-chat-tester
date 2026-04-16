@@ -16,6 +16,7 @@ dependencies = [
     "pymysql>=1.1.0",
     "pyrefly>=0.60.0",
     "python-dotenv>=1.2.2",
+    "pyyaml>=6.0.3",
     "redis>=7.4.0",
     "requests>=2.33.1",
     "sendgrid>=6.12.5",
