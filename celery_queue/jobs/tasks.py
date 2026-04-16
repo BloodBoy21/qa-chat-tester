@@ -23,9 +23,11 @@ from lib.mongo import db
 from db.repositories.test_case_repository import TestCaseRepository
 from db.repositories.run_repository import RunRepository
 from loguru import logger
+from lib.agent_loop import run_agent
 
 
 # ── Repo helpers ──────────────────────────────────────────────────────────────
+
 
 def _runs() -> RunRepository:
     return RunRepository(db["runs"])
@@ -36,6 +38,7 @@ def _test_cases() -> TestCaseRepository:
 
 
 # ── Shared runner ─────────────────────────────────────────────────────────────
+
 
 def _execute_cases(
     run_id: str,
@@ -48,19 +51,22 @@ def _execute_cases(
     Runs inside a Celery worker process (sync context).
     """
     # Import here to avoid circular imports at module load time
-    from main import run_agent
 
     run_repo = _runs()
     run_repo.mark_running(run_id)
 
     for i, case in enumerate(cases):
         payload = case.get("payload", case)
-        user_id = payload.get("user_id", "default_user") if isinstance(payload, dict) else "default_user"
-        context = payload if isinstance(payload, str) else __import__("json").dumps(payload)
-
-        logger.info(
-            f"[run={run_id}] Case {i + 1}/{len(cases)} | user_id={user_id}"
+        user_id = (
+            payload.get("user_id", "default_user")
+            if isinstance(payload, dict)
+            else "default_user"
         )
+        context = (
+            payload if isinstance(payload, str) else __import__("json").dumps(payload)
+        )
+
+        logger.info(f"[run={run_id}] Case {i + 1}/{len(cases)} | user_id={user_id}")
 
         conversation_run_id = None
         failed = False
@@ -87,6 +93,7 @@ def _execute_cases(
 
 
 # ── Tasks ─────────────────────────────────────────────────────────────────────
+
 
 @celery_app.task(
     bind=True,

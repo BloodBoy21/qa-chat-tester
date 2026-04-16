@@ -9,7 +9,7 @@ celery_app = Celery(
     "qa_chat_tester",
     broker=f"{redis_url}/0",
     backend=f"{redis_url}/0",
-    include=["services.jobs.tasks"],  # Include the tasks module
+    include=["celery_queue.jobs.tasks"],
 )
 
 WORKER_CONCURRENCY = int(os.getenv("WORKER_CONCURRENCY", 1))
