@@ -38,6 +38,7 @@ services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
+    command: redis-server --maxmemory 512mb --maxmemory-policy allkeys-lru
     volumes:
       - redis_data:/data
     ports:
@@ -77,6 +78,18 @@ services:
       timeout: 5s
       retries: 5
 
+  # ── Worker (scale this to increase throughput) ────────────────────────────────
+  #
+  # Target: 500+ conversations / hour
+  # Formula: conversations_per_hour = replicas × WORKER_CONCURRENCY × (3600 / avg_conv_seconds)
+  # Example: 3 replicas × 15 concurrency × (3600 / 300s) = 540 conv/h
+  #
+  # Scale up:   docker compose up -d --scale worker=5
+  # Scale down: docker compose up -d --scale worker=1
+  #
+  # Memory: ~200MB per worker slot → 15 slots = ~3GB RAM per replica
+  # Recommended: 8GB RAM machine for 3 replicas × 15 concurrency
+
   worker:
     build:
       context: .
@@ -88,7 +101,12 @@ services:
       MONGO_DB: ${MONGO_DB:-qa_chat_tester}
       DATABASE_URL: mysql+pymysql://${MYSQL_USER:-root}:${MYSQL_PASSWORD:-root}@mysql/${MYSQL_DB:-qa_chat_tester}
       REDIS_URI: redis://redis:6379
-      WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-1}
+      WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-15}
+    deploy:
+      replicas: ${WORKER_REPLICAS:-1}
+      resources:
+        limits:
+          memory: ${WORKER_MEMORY:-4G}
     depends_on:
       mongo:
         condition: service_healthy
@@ -108,11 +126,20 @@ services:
       api:
         condition: service_healthy
 
-  # ── CLI (run-once, not a long-lived service) ──────────────────────────────────
-  # Usage:
-  #   docker compose run --rm cli json_file=cases.json batch_size=10
-  #   docker compose run --rm cli context="Prueba rápida" user_id=123
+  # ── Flower — Celery monitor (optional) ───────────────────────────────────────
+  # Access at http://localhost:5555
+  flower:
+    image: mher/flower:2.0
+    restart: unless-stopped
+    command: celery flower --broker=redis://redis:6379/0 --port=5555
+    ports:
+      - "5555:5555"
+    depends_on:
+      - redis
+    profiles:
+      - monitoring
 
+  # ── CLI (run-once) ────────────────────────────────────────────────────────────
   cli:
     build:
       context: .
@@ -128,7 +155,7 @@ services:
       mongo:
         condition: service_healthy
     profiles:
-      - cli  # only started explicitly: docker compose --profile cli run cli ...
+      - cli
 
 volumes:
   mongo_data:

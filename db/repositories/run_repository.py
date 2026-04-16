@@ -134,6 +134,26 @@ class RunRepository(BaseMongoRepository):
 
     # ── pause/stop helpers used by the Celery task ────────────────────────────
 
+    def try_complete(self, run_id: str) -> bool:
+        """
+        Atomically mark the run as completed if all cases have been recorded.
+        Called by each process_case task after it finishes.
+        Only the task that records the last case will actually flip the status.
+        Returns True if this call completed the run.
+        """
+        result = self.collection.find_one_and_update(
+            {
+                "run_id": run_id,
+                "status": {"$in": [self.STATUS_RUNNING, self.STATUS_PAUSED]},
+                "$expr": {"$gte": ["$completed_cases", "$total_cases"]},
+            },
+            {"$set": {
+                "status": self.STATUS_COMPLETED,
+                "finished_at": self._now_datetime(),
+            }},
+        )
+        return result is not None
+
     def wait_if_paused(self, run_id: str, poll_interval: float = 3.0) -> bool:
         """
         Block until the run is no longer paused.
