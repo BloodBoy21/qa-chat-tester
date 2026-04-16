@@ -455,7 +455,10 @@ pre.raw-pre{font-family:'JetBrains Mono','Fira Code',monospace;font-size:11.5px;
               <div style="display:flex;gap:4px">
                 <button @click="convGoPage(1)" :disabled="convs.page===1" class="pgbtn">«</button>
                 <button @click="convGoPage(convs.page-1)" :disabled="convs.page===1" class="pgbtn">‹</button>
-                <button v-for="p in convPageRange" :key="p" @click="convGoPage(p)" :class="['pgbtn',p===convs.page&&'active']">{{ p }}</button>
+                <template v-for="p in pgRange(convs.page, convs.pages)" :key="p??'e'+Math.random()">
+                  <span v-if="p===null" style="color:#7c85a2;padding:0 3px;font-size:12px;line-height:26px">…</span>
+                  <button v-else @click="convGoPage(p)" :class="['pgbtn',p===convs.page&&'active']">{{ p }}</button>
+                </template>
                 <button @click="convGoPage(convs.page+1)" :disabled="convs.page===convs.pages" class="pgbtn">›</button>
                 <button @click="convGoPage(convs.pages)" :disabled="convs.page===convs.pages" class="pgbtn">»</button>
               </div>
@@ -476,7 +479,7 @@ pre.raw-pre{font-family:'JetBrains Mono','Fira Code',monospace;font-size:11.5px;
           </div>
           <div style="padding:18px">
             <!-- stats -->
-            <div v-if="analyses.length" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;margin-bottom:18px">
+            <div v-if="ans.total > 0" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;margin-bottom:18px">
               <div v-for="s in anStatCards" :key="s.label" style="background:#22263a;border:1px solid #2e3250;border-radius:10px;padding:13px 16px">
                 <div style="font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#7c85a2;font-weight:600;margin-bottom:4px">{{ s.label }}</div>
                 <div :style="`font-size:24px;font-weight:700;color:${s.color}`">{{ s.value }}</div>
@@ -484,7 +487,7 @@ pre.raw-pre{font-family:'JetBrains Mono','Fira Code',monospace;font-size:11.5px;
               </div>
             </div>
             <!-- charts -->
-            <div v-if="analyses.length" style="display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap">
+            <div v-if="ans.total > 0" style="display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap">
               <div style="background:#22263a;border:1px solid #2e3250;border-radius:10px;padding:14px;flex:1;min-width:200px;max-width:280px">
                 <div style="font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#7c85a2;margin-bottom:10px">Distribución</div>
                 <div style="position:relative;height:180px"><canvas id="chart-donut"></canvas></div>
@@ -542,9 +545,14 @@ pre.raw-pre{font-family:'JetBrains Mono','Fira Code',monospace;font-size:11.5px;
               <div style="display:flex;align-items:center;justify-content:space-between;margin-top:14px">
                 <span style="font-size:12px;color:#7c85a2">{{ anPageInfo }}</span>
                 <div style="display:flex;gap:4px">
+                  <button @click="anGoPage(1)" :disabled="ans.page===1" class="pgbtn">«</button>
                   <button @click="anGoPage(ans.page-1)" :disabled="ans.page===1" class="pgbtn">‹</button>
-                  <button v-for="p in anPageRange" :key="p" @click="anGoPage(p)" :class="['pgbtn',p===ans.page&&'active']">{{ p }}</button>
+                  <template v-for="p in pgRange(ans.page, ans.pages)" :key="p??'e'+Math.random()">
+                    <span v-if="p===null" style="color:#7c85a2;padding:0 3px;font-size:12px;line-height:26px">…</span>
+                    <button v-else @click="anGoPage(p)" :class="['pgbtn',p===ans.page&&'active']">{{ p }}</button>
+                  </template>
                   <button @click="anGoPage(ans.page+1)" :disabled="ans.page===ans.pages" class="pgbtn">›</button>
+                  <button @click="anGoPage(ans.pages)" :disabled="ans.page===ans.pages" class="pgbtn">»</button>
                 </div>
               </div>
             </template>
@@ -652,9 +660,14 @@ pre.raw-pre{font-family:'JetBrains Mono','Fira Code',monospace;font-size:11.5px;
             <div v-if="suiteCases.pages > 1" style="padding:10px 14px;border-top:1px solid #2e3250;display:flex;align-items:center;justify-content:space-between">
               <span style="font-size:12px;color:#7c85a2">Pág. {{ suiteCases.page }} de {{ suiteCases.pages }}</span>
               <div style="display:flex;gap:4px">
+                <button @click="casesGoPage(1)" :disabled="suiteCases.page===1" class="pgbtn">«</button>
                 <button @click="casesGoPage(suiteCases.page-1)" :disabled="suiteCases.page===1" class="pgbtn">‹</button>
-                <button v-for="p in pgRange(suiteCases.page, suiteCases.pages)" :key="p" @click="casesGoPage(p)" :class="['pgbtn', p===suiteCases.page&&'active']">{{ p }}</button>
+                <template v-for="p in pgRange(suiteCases.page, suiteCases.pages)" :key="p??'e'+Math.random()">
+                  <span v-if="p===null" style="color:#7c85a2;padding:0 3px;font-size:12px;line-height:26px">…</span>
+                  <button v-else @click="casesGoPage(p)" :class="['pgbtn', p===suiteCases.page&&'active']">{{ p }}</button>
+                </template>
                 <button @click="casesGoPage(suiteCases.page+1)" :disabled="suiteCases.page===suiteCases.pages" class="pgbtn">›</button>
+                <button @click="casesGoPage(suiteCases.pages)" :disabled="suiteCases.page===suiteCases.pages" class="pgbtn">»</button>
               </div>
             </div>
           </div>
@@ -761,9 +774,14 @@ pre.raw-pre{font-family:'JetBrains Mono','Fira Code',monospace;font-size:11.5px;
             <div v-if="runs.pages > 1" style="padding:10px 14px;border-top:1px solid #2e3250;display:flex;align-items:center;justify-content:space-between">
               <span style="font-size:12px;color:#7c85a2">{{ runs.total }} ejecuciones · pág. {{ runs.page }}/{{ runs.pages }}</span>
               <div style="display:flex;gap:4px">
+                <button @click="runsGoPage(1)" :disabled="runs.page===1" class="pgbtn">«</button>
                 <button @click="runsGoPage(runs.page-1)" :disabled="runs.page===1" class="pgbtn">‹</button>
-                <button v-for="p in pgRange(runs.page, runs.pages)" :key="p" @click="runsGoPage(p)" :class="['pgbtn', p===runs.page&&'active']">{{ p }}</button>
+                <template v-for="p in pgRange(runs.page, runs.pages)" :key="p??'e'+Math.random()">
+                  <span v-if="p===null" style="color:#7c85a2;padding:0 3px;font-size:12px;line-height:26px">…</span>
+                  <button v-else @click="runsGoPage(p)" :class="['pgbtn', p===runs.page&&'active']">{{ p }}</button>
+                </template>
                 <button @click="runsGoPage(runs.page+1)" :disabled="runs.page===runs.pages" class="pgbtn">›</button>
+                <button @click="runsGoPage(runs.pages)" :disabled="runs.page===runs.pages" class="pgbtn">»</button>
               </div>
             </div>
           </div>
@@ -964,7 +982,7 @@ pre.raw-pre{font-family:'JetBrains Mono','Fira Code',monospace;font-size:11.5px;
       <div style="overflow-y:auto;padding:20px;flex:1;font-size:13px;line-height:1.7">
         <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px">
           <div style="background:#22263a;border-radius:8px;padding:10px 14px;text-align:center">
-            <div style="font-size:22px;font-weight:700;color:#6c63ff">{{ analyses.length }}</div>
+            <div style="font-size:22px;font-weight:700;color:#6c63ff">{{ ans.summary?.total ?? ans.total }}</div>
             <div style="font-size:10px;color:#7c85a2;text-transform:uppercase">Analizados</div>
           </div>
           <div style="background:#22263a;border-radius:8px;padding:10px 14px;text-align:center">
@@ -999,7 +1017,7 @@ pre.raw-pre{font-family:'JetBrains Mono','Fira Code',monospace;font-size:11.5px;
         </div>
         <div v-if="anStats.fail>0">
           <h4 style="font-size:11px;text-transform:uppercase;letter-spacing:.07em;font-weight:700;color:#6c63ff;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid #2e3250">Casos fallidos ({{ Math.min(anStats.fail,20) }})</h4>
-          <div v-for="a in analyses.filter(x=>x.complete===false).slice(0,20)" :key="a._id"
+          <div v-for="a in ans.items.filter(x=>x.complete===false).slice(0,20)" :key="a._id"
             style="padding:10px 14px;border-radius:8px;background:rgba(248,113,113,.05);border:1px solid rgba(248,113,113,.15);margin-bottom:8px">
             <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:5px">
               <span v-if="a.scenario_group_id" class="chip chip-blue" style="font-size:10px">{{ a.scenario_group_id }}</span>
@@ -1132,12 +1150,6 @@ createApp({
       const e = Math.min(page * page_size, total);
       return total ? `${s}–${e} de ${total}` : '0 resultados';
     },
-    convPageRange() {
-      const { page, pages } = this.convs;
-      const d = 2, list = [];
-      for (let i = Math.max(1, page - d); i <= Math.min(pages, page + d); i++) list.push(i);
-      return list;
-    },
 
     // ── Analyses (server-side) ──
     anSummary() {
@@ -1192,12 +1204,6 @@ createApp({
       const s = (page - 1) * page_size + 1;
       const e = Math.min(page * page_size, total);
       return total ? `${s}–${e} de ${total}` : '0 resultados';
-    },
-    anPageRange() {
-      const { page, pages } = this.ans;
-      const d = 2, list = [];
-      for (let i = Math.max(1, page - d); i <= Math.min(pages, page + d); i++) list.push(i);
-      return list;
     },
   },
 
@@ -1845,9 +1851,21 @@ createApp({
 
     // ── Utils ──
     pgRange(page, pages) {
-      const d = 2, list = [];
-      for (let i = Math.max(1, page - d); i <= Math.min(pages, page + d); i++) list.push(i);
-      return list;
+      // Always include 1, last, and ±2 around current; null = ellipsis
+      if (pages <= 7) return Array.from({ length: pages }, (_, i) => i + 1);
+      const d = 2;
+      const near = new Set();
+      near.add(1); near.add(pages);
+      for (let i = Math.max(1, page - d); i <= Math.min(pages, page + d); i++) near.add(i);
+      const sorted = [...near].sort((a, b) => a - b);
+      const result = [];
+      let prev = 0;
+      for (const n of sorted) {
+        if (n - prev > 1) result.push(null); // ellipsis
+        result.push(n);
+        prev = n;
+      }
+      return result;
     },
     copyValue(text, label = '') {
       navigator.clipboard.writeText(String(text)).then(() => {
