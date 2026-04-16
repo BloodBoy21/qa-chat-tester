@@ -12,6 +12,7 @@ Plataforma SaaS interna para QA automatizado de agentes de IA conversacionales. 
 - [Servicios](#servicios)
   - [API (FastAPI)](#api-fastapi)
   - [Worker (Celery)](#worker-celery)
+  - [Escalado para alta carga (500+ conv/h)](#escalado-para-alta-carga-500-conversacioneshora)
   - [Dashboard](#dashboard)
   - [CLI](#cli)
 - [Multi-tenancy](#multi-tenancy)
@@ -302,21 +303,124 @@ GET /v1/analyses?status=fail&group=TC005B&search=paquetes
 
 ### Worker (Celery)
 
-Procesa las tareas de ejecución de casos en background.
+Procesa las tareas de ejecución de casos en background usando arquitectura paralela: cada caso se despacha como un task independiente, permitiendo ejecución masiva concurrente.
 
 ```bash
-# Local
+# Local — desarrollo (1 caso a la vez)
 uv run celery -A celery_queue.config:celery_app worker --loglevel=info
 
-# Con concurrencia mayor (más casos en paralelo)
-WORKER_CONCURRENCY=3 uv run celery -A celery_queue.config:celery_app worker --loglevel=info
+# Local — alta concurrencia
+WORKER_CONCURRENCY=15 uv run celery -A celery_queue.config:celery_app worker --loglevel=info
 ```
 
 **Tareas disponibles:**
-- `jobs.run_suite` — ejecuta todos (o una selección) de casos de un suite
-- `jobs.run_case` — ejecuta un caso individual
 
-El worker comprueba el estado del run en MongoDB entre cada caso para detectar si fue pausado o detenido.
+| Task | Descripción |
+|------|-------------|
+| `jobs.run_suite` | Orquestador: despacha N tasks `process_case` en paralelo vía `celery.group` |
+| `jobs.run_case` | Ejecuta un caso individual |
+| `jobs.process_case` | Ejecuta **una** conversación completa (unidad mínima de ejecución) |
+
+**Comportamiento de pause/stop con ejecución paralela:**
+
+Cada `process_case` consulta el estado del run en MongoDB antes de iniciar la conversación. Si el run está pausado espera; si está detenido sale sin procesar. Las conversaciones ya en curso no se interrumpen a mitad — terminan y la siguiente no arranca.
+
+---
+
+### Escalado para alta carga (500+ conversaciones/hora)
+
+#### Arquitectura paralela
+
+```
+Antes (serie):   run_suite → [caso1 → caso2 → caso3 → ...]   1 proceso
+Después (paralelo): run_suite ─► process_case(caso1)  ┐
+                                 process_case(caso2)  ├─ N workers × C slots
+                                 process_case(caso3)  │
+                                 ...proceso500        ┘
+```
+
+#### Fórmula de capacidad
+
+```
+conversaciones/hora = réplicas_worker × WORKER_CONCURRENCY × (3600 / duración_promedio_segundos)
+```
+
+**Ejemplo con conversaciones de 5 min (300 s):**
+
+| Réplicas | Concurrencia | Slots totales | Conv/hora |
+|----------|-------------|---------------|-----------|
+| 1        | 10          | 10            | 120       |
+| 2        | 15          | 30            | 360       |
+| 3        | 15          | 45            | 540 ✓     |
+| 3        | 20          | 60            | 720       |
+| 5        | 20          | 100           | 1 200     |
+
+> **Regla práctica**: para 500 conv/h con duración promedio de 5 min necesitas **~42 slots concurrentes** activos. Con `3 réplicas × 15 concurrencia = 45 slots` lo alcanzas con margen.
+
+#### Escalado con Docker Compose
+
+```bash
+# Escalar a 3 réplicas, 15 slots cada una → 540 conv/h
+WORKER_CONCURRENCY=15 docker compose up -d --scale worker=3
+
+# Verificar workers activos
+docker compose ps worker
+
+# Monitoreo en tiempo real con Flower
+docker compose --profile monitoring up -d flower
+# → http://localhost:5555
+```
+
+#### Escalado local (sin Docker)
+
+```bash
+# Terminal 1 — worker A
+WORKER_CONCURRENCY=15 uv run celery -A celery_queue.config:celery_app worker \
+  --loglevel=info --hostname=worker-a@%h
+
+# Terminal 2 — worker B
+WORKER_CONCURRENCY=15 uv run celery -A celery_queue.config:celery_app worker \
+  --loglevel=info --hostname=worker-b@%h
+
+# Terminal 3 — worker C
+WORKER_CONCURRENCY=15 uv run celery -A celery_queue.config:celery_app worker \
+  --loglevel=info --hostname=worker-c@%h
+```
+
+#### Recursos de infraestructura
+
+Cada slot Celery (prefork) es un proceso Python independiente:
+
+| Recurso | Por slot | 45 slots (3×15) |
+|---------|----------|-----------------|
+| RAM     | ~200 MB  | ~9 GB           |
+| CPU     | I/O-bound (espera LLM) | 4-8 cores suficientes |
+
+**Recomendaciones de máquina para 3 réplicas × 15 concurrencia:**
+- RAM: 16 GB mínimo (9 GB workers + SO + Mongo + Redis)
+- CPU: 4-8 vCPUs (el trabajo es mayormente I/O, no CPU)
+- Red: 100 Mbps+ (cada conversación hace múltiples llamadas HTTP a Gemini y al agente)
+
+#### Rate limits de Gemini
+
+El limitante externo más común. Si aparecen errores `429 Resource Exhausted`:
+
+```
+Error: 429 Resource Exhausted / quota exceeded
+```
+
+El worker reintenta automáticamente con backoff (60 s entre intentos, máx 3 reintentos). Para evitar alcanzar el límite:
+
+| Tier Gemini | RPM aproximado | Slots recomendados |
+|-------------|---------------|-------------------|
+| Free        | 15 RPM        | 2-3               |
+| Pay-as-you-go | 1 000 RPM   | 20-50             |
+| Enterprise  | 10 000+ RPM   | 100+              |
+
+```bash
+# Reducir concurrencia si hay errores 429 persistentes
+WORKER_CONCURRENCY=8 docker compose up -d --scale worker=3
+```
 
 ---
 
