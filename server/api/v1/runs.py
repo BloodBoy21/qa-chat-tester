@@ -7,6 +7,7 @@ from db.repositories.run_repository import RunRepository
 from db.repositories.test_suite_repository import TestSuiteRepository
 from db.repositories.test_case_repository import TestCaseRepository
 from server.api.v1.deps import get_account_id
+from server.api.v1.pagination import make_page
 
 router = APIRouter(prefix="/runs", tags=["runs"])
 
@@ -59,10 +60,18 @@ class RunCaseRequest(BaseModel):
 async def list_runs(
     account_id: str = Depends(get_account_id),
     suite_id: str = Query(None),
-    limit: int = Query(50, ge=1, le=200),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(25, ge=1, le=200),
 ):
-    runs = _runs().get_all(account_id, limit=limit, suite_id=suite_id)
-    return [_serialize_run(r) for r in runs]
+    col = db["runs"]
+    query = {"account_id": account_id}
+    if suite_id:
+        query["suite_id"] = suite_id
+    total = col.count_documents(query)
+    skip = (page - 1) * page_size
+    docs = list(col.find(query).sort("created_at", -1).skip(skip).limit(page_size))
+    items = [_serialize_run(r) for r in (_runs()._serialize(d) for d in docs)]
+    return make_page(items, total, page, page_size)
 
 
 @router.get("/{run_id}")

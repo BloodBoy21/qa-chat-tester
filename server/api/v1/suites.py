@@ -5,6 +5,7 @@ from lib.mongo import db
 from db.repositories.test_suite_repository import TestSuiteRepository
 from db.repositories.test_case_repository import TestCaseRepository
 from server.api.v1.deps import get_account_id
+from server.api.v1.pagination import make_page
 
 router = APIRouter(prefix="/suites", tags=["suites"])
 
@@ -61,13 +62,29 @@ class CaseUpdate(BaseModel):
 # ── Suite CRUD ────────────────────────────────────────────────────────────────
 
 @router.get("")
-async def list_suites(account_id: str = Depends(get_account_id)):
-    suites = _suites().get_all(account_id)
+async def list_suites(
+    account_id: str = Depends(get_account_id),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=200),
+):
+    col = db["test_suites"]
+    total = col.count_documents({"account_id": account_id})
+    skip = (page - 1) * page_size
+    docs = list(
+        col.find({"account_id": account_id})
+        .sort("created_at", -1)
+        .skip(skip)
+        .limit(page_size)
+    )
     case_repo = _cases()
-    for suite in suites:
-        _serialize_dt(suite)
-        suite["case_count"] = case_repo.count_by_suite(suite["_id"], account_id)
-    return suites
+    items = []
+    for doc in docs:
+        from db.repositories.base import BaseMongoRepository
+        doc["_id"] = str(doc["_id"])
+        _serialize_dt(doc)
+        doc["case_count"] = case_repo.count_by_suite(doc["_id"], account_id)
+        items.append(doc)
+    return make_page(items, total, page, page_size)
 
 
 @router.post("", status_code=201)
@@ -113,10 +130,24 @@ async def delete_suite(suite_id: str, account_id: str = Depends(get_account_id))
 # ── Cases within a suite ──────────────────────────────────────────────────────
 
 @router.get("/{suite_id}/cases")
-async def list_cases(suite_id: str, account_id: str = Depends(get_account_id)):
+async def list_cases(
+    suite_id: str,
+    account_id: str = Depends(get_account_id),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(25, ge=1, le=200),
+):
     _suite_or_404(suite_id, account_id)
-    cases = _cases().get_by_suite(suite_id, account_id)
-    return [_serialize_dt(c) for c in cases]
+    col = db["test_cases"]
+    query = {"suite_id": suite_id, "account_id": account_id}
+    total = col.count_documents(query)
+    skip = (page - 1) * page_size
+    docs = list(col.find(query).sort("created_at", 1).skip(skip).limit(page_size))
+    items = []
+    for doc in docs:
+        doc["_id"] = str(doc["_id"])
+        _serialize_dt(doc)
+        items.append(doc)
+    return make_page(items, total, page, page_size)
 
 
 @router.post("/{suite_id}/cases", status_code=201)

@@ -22,6 +22,10 @@ DB_PATH = ROOT / "logs.db"
 CASES_PATH = ROOT / "cases.json"
 HTML_PATH = Path(__file__).resolve().parent / "index.html"
 
+# API base URL injected into the HTML as window.__API_BASE__
+_API_BASE = os.getenv("API_BASE_URL", "http://localhost:8000/v1")
+_INJECT = f'<script>window.__API_BASE__="{_API_BASE}";</script>'
+
 # ── Global run state ──────────────────────────────────────────────────────────
 import signal as _signal
 
@@ -261,7 +265,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
     # ── endpoint implementations ──
 
     def _html(self):
-        body = HTML_PATH.read_bytes()
+        html = HTML_PATH.read_text(encoding="utf-8")
+        # Inject API base URL before closing </head>
+        html = html.replace("</head>", f"{_INJECT}\n</head>", 1)
+        body = html.encode("utf-8")
         self.send_response(200)
         self.send_header("Content-Type", "text/html; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))

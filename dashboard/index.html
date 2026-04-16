@@ -121,9 +121,6 @@ pre.raw-pre{font-family:'JetBrains Mono','Fira Code',monospace;font-size:11.5px;
         <div v-if="currentAccount.description" style="font-size:10px;color:#7c85a2;line-height:1.4">{{ currentAccount.description }}</div>
         <div style="font-size:10px;color:#7c85a2;margin-top:2px;font-family:monospace">id: {{ currentAccount.account_id }}</div>
       </div>
-      <!-- api url -->
-      <div class="form-label" style="margin-top:10px;margin-bottom:4px">API URL</div>
-      <input v-model="apiBase" @change="saveSettings" class="input" style="font-size:11px;padding:5px 9px" placeholder="http://localhost:8000/v1"/>
     </div>
   </aside>
 
@@ -373,7 +370,7 @@ pre.raw-pre{font-family:'JetBrains Mono','Fira Code',monospace;font-size:11.5px;
           <div style="background:#1a1d27;border:1px solid #2e3250;border-radius:10px;overflow:hidden">
             <div style="padding:13px 18px;border-bottom:1px solid #2e3250;display:flex;align-items:center;gap:10px">
               <span style="font-weight:600">Conversaciones</span>
-              <span style="color:#7c85a2;font-size:12px">{{ convs.length }} total · <span style="color:#00d4aa">{{ convs.filter(r=>r.insight_summary!=null||r.insight_complete!=null).length }} analizadas</span> · <span style="color:#4ade80">{{ convs.filter(r=>r.insight_complete===true).length }} objetivo cumplido</span></span>
+              <span style="color:#7c85a2;font-size:12px">{{ convs.total }} total · pág. {{ convs.page }}/{{ convs.pages }}</span>
               <div style="margin-left:auto;display:flex;gap:8px">
                 <button @click="loadConvs" class="btn btn-ghost" style="font-size:11px;padding:4px 10px">↻ Actualizar</button>
                 <button @click="downloadExport" class="btn btn-success" style="font-size:11px;padding:4px 10px">⬇ Exportar Excel</button>
@@ -387,39 +384,39 @@ pre.raw-pre{font-family:'JetBrains Mono','Fira Code',monospace;font-size:11.5px;
                 <option value="user_id">Usuario</option><option value="scenario">Escenario</option>
                 <option value="scenario_group_id">Grupo</option>
               </select>
-              <input v-model="convFilter.query" @input="convPage=1" placeholder="Buscar…" class="input" style="flex:1;min-width:140px;font-size:11px;padding:5px 9px"/>
-              <button v-if="convFilter.query" @click="convFilter.query='';convPage=1" class="btn btn-ghost" style="font-size:11px;padding:4px 8px">✕</button>
+              <input v-model="convFilter.query" @input="convs.page=1" placeholder="Buscar…" class="input" style="flex:1;min-width:140px;font-size:11px;padding:5px 9px"/>
+              <button v-if="convFilter.query" @click="convFilter.query='';convs.page=1" class="btn btn-ghost" style="font-size:11px;padding:4px 8px">✕</button>
               <!-- run filter -->
               <div style="display:flex;align-items:center;gap:5px">
                 <span style="font-size:11px;color:#7c85a2;font-weight:600;white-space:nowrap">Run:</span>
                 <div style="position:relative">
-                  <select v-model="convFilter.run_id" @change="convPage=1" class="select" style="font-size:11px;padding:5px 26px 5px 8px;appearance:none;max-width:200px">
+                  <select v-model="convFilter.run_id" @change="convs.page=1" class="select" style="font-size:11px;padding:5px 26px 5px 8px;appearance:none;max-width:200px">
                     <option value="">Todos</option>
-                    <option v-for="r in runs" :key="r.run_id" :value="r.run_id">
+                    <option v-for="r in runs.items" :key="r.run_id" :value="r.run_id">
                       {{ r.run_id.slice(0,14)+'…' }} — {{ r.type }} ({{ r.total_cases }}c · {{ RUN_LABELS[r.status]||r.status }})
                     </option>
                   </select>
                   <svg viewBox="0 0 24 24" fill="none" stroke="#7c85a2" stroke-width="2" style="position:absolute;right:7px;top:50%;transform:translateY(-50%);width:11px;height:11px;pointer-events:none"><polyline points="6 9 12 15 18 9"/></svg>
                 </div>
-                <button v-if="convFilter.run_id" @click="convFilter.run_id='';convPage=1" class="btn btn-ghost" style="font-size:11px;padding:4px 8px">✕</button>
+                <button v-if="convFilter.run_id" @click="convFilter.run_id='';convs.page=1" class="btn btn-ghost" style="font-size:11px;padding:4px 8px">✕</button>
               </div>
               <!-- status / objective -->
               <div style="display:flex;gap:5px;align-items:center">
                 <span style="font-size:11px;color:#7c85a2;font-weight:600">Estado:</span>
                 <button v-for="f in [{v:'all',l:'Todas'},{v:'done',l:'Analizadas'},{v:'pend',l:'En curso'}]" :key="f.v"
-                  @click="convFilter.status=f.v;convPage=1"
+                  @click="convFilter.status=f.v;convs.page=1"
                   :class="['btn',convFilter.status===f.v?'btn-primary':'btn-ghost']" style="font-size:11px;padding:4px 10px">{{ f.l }}</button>
               </div>
               <div style="display:flex;gap:5px;align-items:center">
                 <span style="font-size:11px;color:#7c85a2;font-weight:600">Objetivo:</span>
                 <button v-for="f in [{v:'all',l:'Todos'},{v:'ok',l:'Cumplido'},{v:'fail',l:'No cumplido'}]" :key="f.v"
-                  @click="convFilter.objective=f.v;convPage=1"
+                  @click="convFilter.objective=f.v;convs.page=1"
                   :class="['btn',convFilter.objective===f.v?'btn-primary':'btn-ghost']" style="font-size:11px;padding:4px 10px">{{ f.l }}</button>
               </div>
             </div>
             <!-- table -->
             <div v-if="loading.convs" style="padding:40px;text-align:center"><div class="spinner" style="margin:0 auto"></div></div>
-            <div v-else-if="!filteredConvs.length" style="padding:40px;text-align:center;color:#7c85a2">Sin resultados</div>
+            <div v-else-if="!convs.items.length" style="padding:40px;text-align:center;color:#7c85a2">Sin resultados</div>
             <div v-else class="overflow-x-auto">
               <table style="width:100%;border-collapse:collapse">
                 <thead><tr>
@@ -428,7 +425,7 @@ pre.raw-pre{font-family:'JetBrains Mono','Fira Code',monospace;font-size:11.5px;
                   <th class="th">Objetivo</th><th class="th">Inicio</th>
                 </tr></thead>
                 <tbody>
-                  <tr v-for="r in pagedConvs" :key="r.session_id"
+                  <tr v-for="r in convs.items" :key="r.session_id"
                     @click="openConvDetail(r.session_id)"
                     style="border-top:1px solid #2e3250;cursor:pointer"
                     @mouseover="e=>e.currentTarget.style.background='#22263a'"
@@ -456,11 +453,11 @@ pre.raw-pre{font-family:'JetBrains Mono','Fira Code',monospace;font-size:11.5px;
             <div style="padding:10px 14px;border-top:1px solid #2e3250;display:flex;align-items:center;justify-content:space-between">
               <span style="font-size:12px;color:#7c85a2">{{ convPageInfo }}</span>
               <div style="display:flex;gap:4px">
-                <button @click="convPage=1" :disabled="convPage===1" class="pgbtn">«</button>
-                <button @click="convPage--" :disabled="convPage===1" class="pgbtn">‹</button>
-                <button v-for="p in convPageRange" :key="p" @click="convPage=p" :class="['pgbtn',p===convPage&&'active']">{{ p }}</button>
-                <button @click="convPage++" :disabled="convPage===convTotalPages" class="pgbtn">›</button>
-                <button @click="convPage=convTotalPages" :disabled="convPage===convTotalPages" class="pgbtn">»</button>
+                <button @click="convGoPage(1)" :disabled="convs.page===1" class="pgbtn">«</button>
+                <button @click="convGoPage(convs.page-1)" :disabled="convs.page===1" class="pgbtn">‹</button>
+                <button v-for="p in convPageRange" :key="p" @click="convGoPage(p)" :class="['pgbtn',p===convs.page&&'active']">{{ p }}</button>
+                <button @click="convGoPage(convs.page+1)" :disabled="convs.page===convs.pages" class="pgbtn">›</button>
+                <button @click="convGoPage(convs.pages)" :disabled="convs.page===convs.pages" class="pgbtn">»</button>
               </div>
             </div>
           </div>
@@ -501,23 +498,23 @@ pre.raw-pre{font-family:'JetBrains Mono','Fira Code',monospace;font-size:11.5px;
             <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:12px 0 10px;border-top:1px solid #2e3250;margin-bottom:4px">
               <div style="display:flex;gap:5px;flex-wrap:wrap">
                 <button v-for="f in anStatusFilters" :key="f.k"
-                  @click="anFilter.status=f.k;anPage=1"
+                  @click="anFilter.status=f.k;ans.page=1"
                   :class="['btn', anFilter.status===f.k ? (f.k==='ok'?'btn-success':f.k==='fail'?'btn-danger':'btn-primary') : 'btn-ghost']"
                   style="font-size:11px;padding:4px 11px;border-radius:20px">{{ f.l }}</button>
               </div>
-              <select v-if="anGroupNames.length" v-model="anFilter.group" @change="anPage=1" class="select" style="font-size:11px;padding:5px 8px">
+              <select v-if="anGroupNames.length" v-model="anFilter.group" @change="ans.page=1" class="select" style="font-size:11px;padding:5px 8px">
                 <option value="">Todos los grupos</option>
                 <option v-for="g in anGroupNames" :key="g" :value="g">{{ g }}</option>
               </select>
-              <input v-model="anFilter.search" @input="anPage=1" placeholder="Buscar en análisis…" class="input" style="flex:1;min-width:160px;font-size:11px;padding:5px 9px"/>
-              <button v-if="anFilter.search" @click="anFilter.search='';anPage=1" class="btn btn-ghost" style="font-size:11px;padding:4px 8px">✕</button>
+              <input v-model="anFilter.search" @input="ans.page=1" placeholder="Buscar en análisis…" class="input" style="flex:1;min-width:160px;font-size:11px;padding:5px 9px"/>
+              <button v-if="anFilter.search" @click="anFilter.search='';ans.page=1" class="btn btn-ghost" style="font-size:11px;padding:4px 8px">✕</button>
             </div>
             <!-- list -->
             <div v-if="loading.analyses" style="padding:40px;text-align:center"><div class="spinner" style="margin:0 auto"></div></div>
-            <div v-else-if="!filteredAnalyses.length" style="padding:40px;text-align:center;color:#7c85a2">Sin resultados</div>
+            <div v-else-if="!ans.items.length" style="padding:40px;text-align:center;color:#7c85a2">Sin resultados</div>
             <template v-else>
-              <div style="font-size:12px;color:#7c85a2;margin-bottom:10px">{{ filteredAnalyses.length }} resultado{{ filteredAnalyses.length!==1?'s':'' }}</div>
-              <div v-for="a in pagedAnalyses" :key="a._id"
+              <div style="font-size:12px;color:#7c85a2;margin-bottom:10px">{{ ans.total }} resultado{{ ans.total!==1?'s':'' }}</div>
+              <div v-for="a in ans.items" :key="a._id"
                 :style="`background:#1a1d27;border:1px solid #2e3250;border-left:3px solid ${a.complete===true?'#4ade80':a.complete===false?'#f87171':'#fbbf24'};border-radius:10px;padding:15px 17px;margin-bottom:10px;transition:.15s`"
                 @mouseover="e=>e.currentTarget.style.background='#22263a'"
                 @mouseleave="e=>e.currentTarget.style.background='#1a1d27'">
@@ -545,9 +542,9 @@ pre.raw-pre{font-family:'JetBrains Mono','Fira Code',monospace;font-size:11.5px;
               <div style="display:flex;align-items:center;justify-content:space-between;margin-top:14px">
                 <span style="font-size:12px;color:#7c85a2">{{ anPageInfo }}</span>
                 <div style="display:flex;gap:4px">
-                  <button @click="anPage--" :disabled="anPage===1" class="pgbtn">‹</button>
-                  <button v-for="p in anPageRange" :key="p" @click="anPage=p" :class="['pgbtn',p===anPage&&'active']">{{ p }}</button>
-                  <button @click="anPage++" :disabled="anPage===anTotalPages" class="pgbtn">›</button>
+                  <button @click="anGoPage(ans.page-1)" :disabled="ans.page===1" class="pgbtn">‹</button>
+                  <button v-for="p in anPageRange" :key="p" @click="anGoPage(p)" :class="['pgbtn',p===ans.page&&'active']">{{ p }}</button>
+                  <button @click="anGoPage(ans.page+1)" :disabled="ans.page===ans.pages" class="pgbtn">›</button>
                 </div>
               </div>
             </template>
@@ -583,10 +580,10 @@ pre.raw-pre{font-family:'JetBrains Mono','Fira Code',monospace;font-size:11.5px;
             <!-- toolbar -->
             <div style="padding:11px 18px;border-bottom:1px solid #2e3250;display:flex;align-items:center;gap:10px;min-height:48px">
               <!-- select-all checkbox -->
-              <div v-if="suiteCases.length" :class="['cb', selectedCases.length===suiteCases.length&&suiteCases.length>0?'checked':'']"
+              <div v-if="suiteCases.items.length" :class="['cb', selectedCases.length===suiteCases.items.length&&suiteCases.items.length>0?'checked':'']"
                 @click="toggleSelectAll" title="Seleccionar todos"></div>
               <span style="font-weight:600">Casos de prueba</span>
-              <span style="font-size:12px;color:#7c85a2">{{ suiteCases.length }} casos</span>
+              <span style="font-size:12px;color:#7c85a2">{{ suiteCases.total }} casos · pág. {{ suiteCases.page }}/{{ suiteCases.pages }}</span>
               <!-- bulk-delete toolbar -->
               <transition name="fade">
                 <div v-if="selectedCases.length" style="display:flex;align-items:center;gap:8px;margin-left:4px">
@@ -598,12 +595,12 @@ pre.raw-pre{font-family:'JetBrains Mono','Fira Code',monospace;font-size:11.5px;
               <button @click="loadCases(currentSuite._id)" class="btn btn-ghost" style="font-size:11px;padding:4px 8px;margin-left:auto">↻</button>
             </div>
             <div v-if="loading.cases" style="padding:40px;text-align:center"><div class="spinner" style="margin:0 auto"></div></div>
-            <div v-else-if="!suiteCases.length" style="padding:48px;text-align:center;color:#7c85a2">
+            <div v-else-if="!suiteCases.items.length" style="padding:48px;text-align:center;color:#7c85a2">
               <div style="font-size:32px;margin-bottom:12px">📋</div>
               <div>Sin casos. Crea uno manualmente o sube un archivo JSON.</div>
             </div>
             <div v-else>
-              <template v-for="c in suiteCases" :key="c._id">
+              <template v-for="c in suiteCases.items" :key="c._id">
                 <!-- case row -->
                 <div :class="['case-row', selectedCases.includes(c._id)?'selected':'', expandedCase===c._id?'expanded':'']"
                   style="padding:11px 18px;display:flex;align-items:center;gap:12px;border-left:2px solid transparent">
@@ -651,6 +648,15 @@ pre.raw-pre{font-family:'JetBrains Mono','Fira Code',monospace;font-size:11.5px;
                 </div>
               </template>
             </div>
+            <!-- cases pagination -->
+            <div v-if="suiteCases.pages > 1" style="padding:10px 14px;border-top:1px solid #2e3250;display:flex;align-items:center;justify-content:space-between">
+              <span style="font-size:12px;color:#7c85a2">Pág. {{ suiteCases.page }} de {{ suiteCases.pages }}</span>
+              <div style="display:flex;gap:4px">
+                <button @click="casesGoPage(suiteCases.page-1)" :disabled="suiteCases.page===1" class="pgbtn">‹</button>
+                <button v-for="p in pgRange(suiteCases.page, suiteCases.pages)" :key="p" @click="casesGoPage(p)" :class="['pgbtn', p===suiteCases.page&&'active']">{{ p }}</button>
+                <button @click="casesGoPage(suiteCases.page+1)" :disabled="suiteCases.page===suiteCases.pages" class="pgbtn">›</button>
+              </div>
+            </div>
           </div>
         </template>
 
@@ -661,13 +667,13 @@ pre.raw-pre{font-family:'JetBrains Mono','Fira Code',monospace;font-size:11.5px;
             <button @click="openSuiteModal(null)" class="btn btn-primary">+ Nueva suite</button>
           </div>
           <div v-if="loading.suites" style="padding:48px;text-align:center"><div class="spinner" style="margin:0 auto"></div></div>
-          <div v-else-if="!suites.length" style="padding:60px;text-align:center;color:#7c85a2">
+          <div v-else-if="!suites.items.length" style="padding:60px;text-align:center;color:#7c85a2">
             <div style="font-size:40px;margin-bottom:16px">📁</div>
             <div style="margin-bottom:12px">No hay suites. Crea la primera.</div>
             <button @click="openSuiteModal(null)" class="btn btn-primary">Crear suite</button>
           </div>
           <div v-else style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px">
-            <div v-for="s in suites" :key="s._id"
+            <div v-for="s in suites.items" :key="s._id"
               style="background:#1a1d27;border:1px solid #2e3250;border-radius:10px;padding:16px;display:flex;flex-direction:column;gap:12px;transition:.15s"
               @mouseover="e=>e.currentTarget.style.borderColor='rgba(108,99,255,.4)'"
               @mouseleave="e=>e.currentTarget.style.borderColor='#2e3250'">
@@ -699,18 +705,18 @@ pre.raw-pre{font-family:'JetBrains Mono','Fira Code',monospace;font-size:11.5px;
             <div style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
               <select v-model="runsFilter.suite_id" @change="loadRuns" class="select" style="font-size:11px;padding:5px 8px">
                 <option value="">Todas las suites</option>
-                <option v-for="s in suites" :key="s._id" :value="s._id">{{ s.title }}</option>
+                <option v-for="s in suites.items" :key="s._id" :value="s._id">{{ s.title }}</option>
               </select>
               <button @click="loadRuns" class="btn btn-ghost" style="font-size:11px;padding:4px 10px">↻ Actualizar</button>
             </div>
           </div>
           <div v-if="loading.runs" style="padding:40px;text-align:center"><div class="spinner" style="margin:0 auto"></div></div>
-          <div v-else-if="!runs.length" style="padding:48px;text-align:center;color:#7c85a2">
+          <div v-else-if="!runs.items.length" style="padding:48px;text-align:center;color:#7c85a2">
             <div style="font-size:32px;margin-bottom:12px">▶</div>
             Sin ejecuciones. Ejecuta un suite desde Test Suites.
           </div>
           <div v-else>
-            <div v-for="r in runs" :key="r.run_id"
+            <div v-for="r in runs.items" :key="r.run_id"
               style="padding:12px 18px;border-top:1px solid #2e3250;display:flex;align-items:center;gap:12px;transition:.15s"
               @mouseover="e=>e.currentTarget.style.background='#22263a'"
               @mouseleave="e=>e.currentTarget.style.background='transparent'">
@@ -749,6 +755,15 @@ pre.raw-pre{font-family:'JetBrains Mono','Fira Code',monospace;font-size:11.5px;
                 <div style="text-align:right">
                   <div style="font-size:11px;color:#7c85a2">{{ fmtDate(r.created_at) }}</div>
                 </div>
+              </div>
+            </div>
+            <!-- runs pagination -->
+            <div v-if="runs.pages > 1" style="padding:10px 14px;border-top:1px solid #2e3250;display:flex;align-items:center;justify-content:space-between">
+              <span style="font-size:12px;color:#7c85a2">{{ runs.total }} ejecuciones · pág. {{ runs.page }}/{{ runs.pages }}</span>
+              <div style="display:flex;gap:4px">
+                <button @click="runsGoPage(runs.page-1)" :disabled="runs.page===1" class="pgbtn">‹</button>
+                <button v-for="p in pgRange(runs.page, runs.pages)" :key="p" @click="runsGoPage(p)" :class="['pgbtn', p===runs.page&&'active']">{{ p }}</button>
+                <button @click="runsGoPage(runs.page+1)" :disabled="runs.page===runs.pages" class="pgbtn">›</button>
               </div>
             </div>
           </div>
@@ -1013,8 +1028,8 @@ const { createApp, ref, reactive, computed, watch, nextTick, onMounted } = Vue;
 createApp({
   data() {
     return {
-      // ── Config (persisted) ──
-      apiBase: localStorage.getItem('qa_apiBase') || 'http://localhost:8000/v1',
+      // ── Config ──
+      apiBase: window.__API_BASE__ || localStorage.getItem('qa_apiBase') || 'http://localhost:8000/v1',
       accountId: localStorage.getItem('qa_accountId') || '3057',
 
       // ── Navigation ──
@@ -1053,29 +1068,27 @@ createApp({
       recentConvs: [],
 
       // ── Conversations ──
-      convs: [],
+      convs:   { items: [], total: 0, page: 1, pages: 1 },
       currentConvId: null,
       convDetail: null,
-      convPage: 1,
-      CONV_PAGE_SIZE: 20,
       convFilter: { field: 'session_id', query: '', status: 'all', objective: 'all', run_id: '' },
       _rawStore: {},
-      convAction: { loading: null, queued: false },  // loading: null|'complete'|'fail'|'analyse'
+      convAction: { loading: null, queued: false },
       _analysisPollTimer: null,
+      _convSearchTimer: null,
 
       // ── Analyses ──
-      analyses: [],
-      anPage: 1,
-      AN_PAGE_SIZE: 15,
+      ans:    { items: [], total: 0, page: 1, pages: 1 },
       anFilter: { status: 'all', group: '', search: '' },
       showReport: false,
       _chartDonut: null,
       _chartBars: null,
+      _anSearchTimer: null,
 
       // ── Suites ──
-      suites: [],
+      suites:    { items: [], total: 0, page: 1, pages: 1 },
       currentSuite: null,
-      suiteCases: [],
+      suiteCases: { items: [], total: 0, page: 1, pages: 1 },
       suiteModal: { show: false, editing: null },
       suiteForm: { title: '', description: '' },
       caseModal: { show: false, editing: null },
@@ -1086,7 +1099,7 @@ createApp({
       caseExpanded: false,
 
       // ── Runs ──
-      runs: [],
+      runs:      { items: [], total: 0, page: 1, pages: 1 },
       runsFilter: { suite_id: '' },
       activeRuns: 0,
       runModal: { show: false, data: null },
@@ -1112,108 +1125,100 @@ createApp({
     },
 
     // Conversations
-    filteredConvs() {
-      let r = this.convs;
-      // filter by run: only show conversations whose run_id is in the selected run's conversation_run_ids
-      if (this.convFilter.run_id) {
-        const run = this.runs.find(x => x.run_id === this.convFilter.run_id);
-        const ids = new Set(run?.conversation_run_ids || []);
-        r = r.filter(c => ids.has(c.run_id));
-      }
-      const q = this.convFilter.query.toLowerCase();
-      if (q) r = r.filter(c => String(c[this.convFilter.field]||'').toLowerCase().includes(q));
-      if (this.convFilter.status === 'done') r = r.filter(c => c.insight_summary!=null || c.insight_complete!=null);
-      if (this.convFilter.status === 'pend') r = r.filter(c => c.insight_summary==null && c.insight_complete==null);
-      if (this.convFilter.objective === 'ok')   r = r.filter(c => c.insight_complete === true);
-      if (this.convFilter.objective === 'fail')  r = r.filter(c => c.insight_complete === false);
-      return r;
-    },
-    convTotalPages() { return Math.max(1, Math.ceil(this.filteredConvs.length / this.CONV_PAGE_SIZE)); },
-    pagedConvs() {
-      const s = (this.convPage - 1) * this.CONV_PAGE_SIZE;
-      return this.filteredConvs.slice(s, s + this.CONV_PAGE_SIZE);
-    },
+    // ── Conversations (server-side) ──
     convPageInfo() {
-      const s = (this.convPage-1)*this.CONV_PAGE_SIZE+1;
-      const e = Math.min(this.convPage*this.CONV_PAGE_SIZE, this.filteredConvs.length);
-      const suf = this.filteredConvs.length !== this.convs.length ? ` (de ${this.convs.length} total)` : '';
-      return `${s}–${e} de ${this.filteredConvs.length}${suf}`;
+      const { page, page_size = 20, total } = this.convs;
+      const s = (page - 1) * page_size + 1;
+      const e = Math.min(page * page_size, total);
+      return total ? `${s}–${e} de ${total}` : '0 resultados';
     },
     convPageRange() {
-      const d = 2, pages = [], c = this.convPage, t = this.convTotalPages;
-      for (let i = Math.max(1,c-d); i <= Math.min(t,c+d); i++) pages.push(i);
-      return pages;
+      const { page, pages } = this.convs;
+      const d = 2, list = [];
+      for (let i = Math.max(1, page - d); i <= Math.min(pages, page + d); i++) list.push(i);
+      return list;
     },
 
-    // Analyses
+    // ── Analyses (server-side) ──
+    anSummary() {
+      // summary comes from the API — accurate counts regardless of active status filter
+      return this.ans.summary || { ok: 0, fail: 0, pending: 0, total: 0 };
+    },
     anStats() {
-      const total = this.analyses.length;
-      const ok    = this.analyses.filter(a => a.complete === true).length;
-      const fail  = this.analyses.filter(a => a.complete === false).length;
-      return { total, ok, fail, pending: total-ok-fail, pctOk: total ? Math.round(ok/total*100) : 0 };
+      const s = this.anSummary;
+      return {
+        total:   s.total,
+        ok:      s.ok,
+        fail:    s.fail,
+        pending: s.pending,
+        pctOk:   s.total ? Math.round(s.ok / s.total * 100) : 0,
+      };
     },
     anStatCards() {
       const s = this.anStats;
       return [
-        { label: 'Total',      value: s.total,   color: '#6c63ff' },
-        { label: 'Tasa éxito', value: s.pctOk+'%', color: '#4ade80' },
-        { label: 'Cumplidos',  value: s.ok,      color: '#4ade80',  sub: s.total ? Math.round(s.ok/s.total*100)+'% del total' : '' },
-        { label: 'Fallidos',   value: s.fail,    color: '#f87171',  sub: s.total ? Math.round(s.fail/s.total*100)+'% del total' : '' },
-        { label: 'Sin evaluar',value: s.pending, color: '#fbbf24',  sub: s.total ? Math.round(s.pending/s.total*100)+'% del total' : '' },
+        { label: 'Total',       value: s.total,       color: '#6c63ff' },
+        { label: 'Tasa éxito',  value: s.pctOk + '%', color: '#4ade80' },
+        { label: 'Cumplidos',   value: s.ok,           color: '#4ade80' },
+        { label: 'Fallidos',    value: s.fail,         color: '#f87171' },
+        { label: 'Sin evaluar', value: s.pending,      color: '#fbbf24' },
       ];
     },
     anGroups() {
       const m = {};
-      this.analyses.forEach(a => {
+      this.ans.items.forEach(a => {
         const g = a.scenario_group_id || '(sin grupo)';
         if (!m[g]) m[g] = { id: g, ok: 0, fail: 0, pend: 0 };
-        if (a.complete===true) m[g].ok++;
-        else if (a.complete===false) m[g].fail++;
+        if (a.complete === true) m[g].ok++;
+        else if (a.complete === false) m[g].fail++;
         else m[g].pend++;
       });
-      return Object.values(m).sort((a,b) => (b.ok+b.fail+b.pend)-(a.ok+a.fail+a.pend));
+      return Object.values(m).sort((a, b) => (b.ok + b.fail + b.pend) - (a.ok + a.fail + a.pend));
     },
-    anGroupNames() { return [...new Set(this.analyses.map(a=>a.scenario_group_id).filter(Boolean))].sort(); },
+    anGroupNames() {
+      return [...new Set(this.ans.items.map(a => a.scenario_group_id).filter(Boolean))].sort();
+    },
     anStatusFilters() {
-      const s = this.anStats;
+      const s = this.anSummary;
       return [
-        { k:'all',     l:`Todos (${s.total})` },
-        { k:'ok',      l:`Cumplidos (${s.ok})` },
-        { k:'fail',    l:`Fallidos (${s.fail})` },
-        { k:'pending', l:`Sin evaluar (${s.pending})` },
+        { k: 'all',     l: `Todos (${s.total})` },
+        { k: 'ok',      l: `Cumplidos (${s.ok})` },
+        { k: 'fail',    l: `Fallidos (${s.fail})` },
+        { k: 'pending', l: `Sin evaluar (${s.pending})` },
       ];
     },
-    filteredAnalyses() {
-      let r = this.analyses;
-      if (this.anFilter.status === 'ok')      r = r.filter(a => a.complete === true);
-      if (this.anFilter.status === 'fail')    r = r.filter(a => a.complete === false);
-      if (this.anFilter.status === 'pending') r = r.filter(a => a.complete !== true && a.complete !== false);
-      if (this.anFilter.group)  r = r.filter(a => (a.scenario_group_id||'') === this.anFilter.group);
-      if (this.anFilter.search) {
-        const q = this.anFilter.search.toLowerCase();
-        r = r.filter(a => (a.analysis||'').toLowerCase().includes(q) || (a.scenario||'').toLowerCase().includes(q) || (a.user_id||'').toLowerCase().includes(q) || (a.session_id||'').toLowerCase().includes(q));
-      }
-      return r;
-    },
-    anTotalPages() { return Math.max(1, Math.ceil(this.filteredAnalyses.length / this.AN_PAGE_SIZE)); },
-    pagedAnalyses() {
-      const s = (this.anPage-1)*this.AN_PAGE_SIZE;
-      return this.filteredAnalyses.slice(s, s+this.AN_PAGE_SIZE);
-    },
     anPageInfo() {
-      const s = (this.anPage-1)*this.AN_PAGE_SIZE+1;
-      const e = Math.min(this.anPage*this.AN_PAGE_SIZE, this.filteredAnalyses.length);
-      return `${s}–${e} de ${this.filteredAnalyses.length}`;
+      const { page, page_size = 15, total } = this.ans;
+      const s = (page - 1) * page_size + 1;
+      const e = Math.min(page * page_size, total);
+      return total ? `${s}–${e} de ${total}` : '0 resultados';
     },
     anPageRange() {
-      const d=2, pages=[], c=this.anPage, t=this.anTotalPages;
-      for (let i=Math.max(1,c-d); i<=Math.min(t,c+d); i++) pages.push(i);
-      return pages;
+      const { page, pages } = this.ans;
+      const d = 2, list = [];
+      for (let i = Math.max(1, page - d); i <= Math.min(pages, page + d); i++) list.push(i);
+      return list;
     },
   },
 
   watch: {
-    anFilter: { deep: true, handler() { this.anPage = 1; } },
+    convFilter: {
+      deep: true,
+      handler() {
+        // Always reset to page 1 and re-fetch from API when any filter changes
+        this.convs.page = 1;
+        clearTimeout(this._convSearchTimer);
+        this._convSearchTimer = setTimeout(() => this.loadConvs(), 300);
+      },
+    },
+    anFilter: {
+      deep: true,
+      handler() {
+        this.ans.page = 1;
+        clearTimeout(this._anSearchTimer);
+        this._anSearchTimer = setTimeout(() => this.loadAnalyses(), 300);
+      },
+    },
   },
 
   mounted() {
@@ -1293,7 +1298,7 @@ createApp({
       if (pg === 'conversations') {
         this.convFilter.run_id = '';
         this.loadConvs();
-        if (!this.runs.length) this.loadRuns();
+        if (!this.runs.items.length) this.loadRuns();
         this._pollTimer = setInterval(() => this.loadConvs(), 6000);
       }
       if (pg === 'analyses')      this.loadAnalyses();
@@ -1330,23 +1335,38 @@ createApp({
       this._pollTimer = setInterval(() => this.loadDashboard(), 5000);
     },
     async loadDashboard() {
-      this.$set ? null : null; // Vue 3
       this.loading = { ...this.loading, dashboard: true };
       try {
         const [stats, convs] = await Promise.all([
           this.api('GET', '/stats'),
-          this.api('GET', '/conversations'),
+          this.api('GET', '/conversations?page=1&page_size=25'),
         ]);
         this.stats = stats;
-        this.recentConvs = convs;
+        this.recentConvs = convs.items || convs;
       } finally { this.loading = { ...this.loading, dashboard: false }; }
     },
 
     // ── Conversations ──
     async loadConvs() {
       this.loading = { ...this.loading, convs: true };
-      try { this.convs = await this.api('GET', '/conversations'); }
-      finally { this.loading = { ...this.loading, convs: false }; }
+      try {
+        const { page, page_size = 20 } = this.convs;
+        const f = this.convFilter;
+        const params = new URLSearchParams({
+          page, page_size,
+          status:       f.status,
+          objective:    f.objective,
+          run_filter:   f.run_id || '',
+          search_field: f.field,
+          search_query: f.query,
+        });
+        const data = await this.api('GET', `/conversations?${params}`);
+        this.convs = { ...data };
+      } finally { this.loading = { ...this.loading, convs: false }; }
+    },
+    convGoPage(p) {
+      this.convs.page = Math.max(1, Math.min(p, this.convs.pages));
+      this.loadConvs();
     },
     async openConvDetail(sid) {
       this.currentConvId = sid;
@@ -1370,7 +1390,7 @@ createApp({
       this._rawStore = {};
       this.caseExpanded = false;
       this.convAction = { loading: null, queued: false };
-      if (!this.convs.length) this.loadConvs();
+      if (!this.convs.items.length) this.loadConvs();
     },
     // Returns payload entries to show in the expanded case panel,
     // skipping fields already displayed in the fixed rows.
@@ -1484,14 +1504,29 @@ createApp({
     async loadAnalyses() {
       this.loading = { ...this.loading, analyses: true };
       try {
-        const res = await this.api('GET', '/analyses');
-        this.analyses = (res || []).map(a => ({ ...a, _expanded: false }));
+        const { page, page_size = 15 } = this.ans;
+        const f = this.anFilter;
+        const params = new URLSearchParams({
+          page, page_size,
+          status: f.status,
+          group:  f.group  || '',
+          search: f.search || '',
+        });
+        const data = await this.api('GET', `/analyses?${params}`);
+        this.ans = {
+          ...data,
+          items: (data.items || []).map(a => ({ ...a, _expanded: false })),
+        };
         await nextTick();
         this.renderCharts();
       } finally { this.loading = { ...this.loading, analyses: false }; }
     },
+    anGoPage(p) {
+      this.ans.page = Math.max(1, Math.min(p, this.ans.pages));
+      this.loadAnalyses();
+    },
     renderCharts() {
-      if (!this.analyses.length || typeof Chart === 'undefined') return;
+      if (!this.ans.items.length || typeof Chart === 'undefined') return;
       [this._chartDonut, this._chartBars].forEach(c => { try { c?.destroy(); } catch(_){} });
 
       const C = {
@@ -1570,7 +1605,7 @@ createApp({
           return `  ${g.id.padEnd(24)}${String(t).padEnd(6)} ${String(g.ok).padEnd(9)} ${String(g.fail).padEnd(8)} ${g.pend}`;
         }),
         '', 'CASOS FALLIDOS',
-        ...this.analyses.filter(a=>a.complete===false).slice(0,20).map(a =>
+        ...this.ans.items.filter(a=>a.complete===false).slice(0,20).map(a =>
           `\n  [${(a.session_id||'?').slice(0,16)}] ${a.scenario_group_id||''} | ${a.scenario||''}\n  ${(a.analysis||'').slice(0,300)}`
         ),
       ];
@@ -1588,19 +1623,34 @@ createApp({
     // ── Suites ──
     async loadSuites() {
       this.loading = { ...this.loading, suites: true };
-      try { this.suites = await this.api('GET', '/suites'); }
-      finally { this.loading = { ...this.loading, suites: false }; }
+      try {
+        const { page, page_size = 20 } = this.suites;
+        const data = await this.api('GET', `/suites?page=${page}&page_size=${page_size}`);
+        this.suites = { ...data };
+      } finally { this.loading = { ...this.loading, suites: false }; }
+    },
+    suitesGoPage(p) {
+      this.suites.page = Math.max(1, Math.min(p, this.suites.pages));
+      this.loadSuites();
     },
     openSuiteDetail(s) {
       this.currentSuite = s;
       this.selectedCases = [];
       this.expandedCase = null;
+      this.suiteCases = { items: [], total: 0, page: 1, pages: 1 };
       this.loadCases(s._id);
     },
     async loadCases(suiteId) {
       this.loading = { ...this.loading, cases: true };
-      try { this.suiteCases = await this.api('GET', `/suites/${suiteId}/cases`); }
-      finally { this.loading = { ...this.loading, cases: false }; }
+      try {
+        const { page, page_size = 25 } = this.suiteCases;
+        const data = await this.api('GET', `/suites/${suiteId}/cases?page=${page}&page_size=${page_size}`);
+        this.suiteCases = { ...data };
+      } finally { this.loading = { ...this.loading, cases: false }; }
+    },
+    casesGoPage(p) {
+      this.suiteCases.page = Math.max(1, Math.min(p, this.suiteCases.pages));
+      this.loadCases(this.currentSuite._id);
     },
     openSuiteModal(suite) {
       this.suiteModal = { show: true, editing: suite };
@@ -1682,10 +1732,10 @@ createApp({
       else this.selectedCases.splice(idx, 1);
     },
     toggleSelectAll() {
-      if (this.selectedCases.length === this.suiteCases.length) {
+      if (this.selectedCases.length === this.suiteCases.items.length) {
         this.selectedCases = [];
       } else {
-        this.selectedCases = this.suiteCases.map(c => c._id);
+        this.selectedCases = this.suiteCases.items.map(c => c._id);
       }
     },
     toggleExpandCase(id) {
@@ -1724,15 +1774,21 @@ createApp({
     async loadRuns() {
       this.loading = { ...this.loading, runs: true };
       try {
-        const path = this.runsFilter.suite_id ? `/runs?suite_id=${this.runsFilter.suite_id}` : '/runs';
-        this.runs = await this.api('GET', path);
-        this.activeRuns = this.runs.filter(r => ['running','pending','paused'].includes(r.status)).length;
-        // keep modal data fresh
+        const { page, page_size = 25 } = this.runs;
+        const params = new URLSearchParams({ page, page_size });
+        if (this.runsFilter.suite_id) params.set('suite_id', this.runsFilter.suite_id);
+        const data = await this.api('GET', `/runs?${params}`);
+        this.runs = { ...data };
+        this.activeRuns = (data.items || []).filter(r => ['running','pending','paused'].includes(r.status)).length;
         if (this.runModal.show && this.runModal.data) {
-          const fresh = this.runs.find(r => r.run_id === this.runModal.data.run_id);
+          const fresh = (data.items || []).find(r => r.run_id === this.runModal.data.run_id);
           if (fresh) this.runModal.data = fresh;
         }
       } finally { this.loading = { ...this.loading, runs: false }; }
+    },
+    runsGoPage(p) {
+      this.runs.page = Math.max(1, Math.min(p, this.runs.pages));
+      this.loadRuns();
     },
     startRunsPoll() {
       this._runsPollTimer = setInterval(() => {
@@ -1788,6 +1844,11 @@ createApp({
     },
 
     // ── Utils ──
+    pgRange(page, pages) {
+      const d = 2, list = [];
+      for (let i = Math.max(1, page - d); i <= Math.min(pages, page + d); i++) list.push(i);
+      return list;
+    },
     copyValue(text, label = '') {
       navigator.clipboard.writeText(String(text)).then(() => {
         this.showGlobalToast(`${label ? label + ' ' : ''}copiado`, 'success');
