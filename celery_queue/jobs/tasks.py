@@ -1,12 +1,13 @@
 """
 Celery tasks for running test suites and individual test cases.
 
-Each task:
+Lifecycle per task:
   1. Marks the Run as "running" in MongoDB
   2. Iterates over the test case payloads
-  3. Calls run_agent() from main.py for each case (async → asyncio.run)
-  4. Records every conversation run_id produced
-  5. Marks the Run as "completed" or "failed"
+  3. Between each case: checks for pause (waits) or stop (exits early)
+  4. Calls run_agent() from lib/agent_loop for each case
+  5. Records every conversation run_id produced
+  6. Marks the Run as completed / stopped / failed
 """
 
 from __future__ import annotations
@@ -28,7 +29,6 @@ from lib.agent_loop import run_agent
 
 # ── Repo helpers ──────────────────────────────────────────────────────────────
 
-
 def _runs() -> RunRepository:
     return RunRepository(db["runs"])
 
@@ -39,23 +39,27 @@ def _test_cases() -> TestCaseRepository:
 
 # ── Shared runner ─────────────────────────────────────────────────────────────
 
-
 def _execute_cases(
     run_id: str,
     account_id: str,
     model: str,
     cases: list[dict],
-) -> None:
+) -> str:
     """
     Core loop: run each case through run_agent and track results in the Run doc.
+    Returns the final status string ("completed" | "stopped").
     Runs inside a Celery worker process (sync context).
     """
-    # Import here to avoid circular imports at module load time
-
     run_repo = _runs()
     run_repo.mark_running(run_id)
 
     for i, case in enumerate(cases):
+        # ── pause / stop check ────────────────────────────────────────────────
+        should_continue = run_repo.wait_if_paused(run_id)
+        if not should_continue:
+            logger.info(f"[run={run_id}] Stopped by user before case {i + 1}")
+            return RunRepository.STATUS_STOPPED
+
         payload = case.get("payload", case)
         user_id = (
             payload.get("user_id", "default_user")
@@ -66,7 +70,9 @@ def _execute_cases(
             payload if isinstance(payload, str) else __import__("json").dumps(payload)
         )
 
-        logger.info(f"[run={run_id}] Case {i + 1}/{len(cases)} | user_id={user_id}")
+        logger.info(
+            f"[run={run_id}] Case {i + 1}/{len(cases)} | user_id={user_id}"
+        )
 
         conversation_run_id = None
         failed = False
@@ -91,26 +97,44 @@ def _execute_cases(
             failed=failed,
         )
 
+    return RunRepository.STATUS_COMPLETED
+
 
 # ── Tasks ─────────────────────────────────────────────────────────────────────
 
-
-@celery_app.task(
-    bind=True,
-    name="jobs.run_suite",
-    max_retries=0,
-)
-def run_suite(self, run_id: str, suite_id: str, account_id: str, model: str):
-    """Execute all test cases in a suite."""
+@celery_app.task(bind=True, name="jobs.run_suite", max_retries=0)
+def run_suite(
+    self,
+    run_id: str,
+    suite_id: str,
+    account_id: str,
+    model: str,
+    case_ids: list[str] | None = None,
+):
+    """
+    Execute test cases in a suite.
+    If case_ids is provided, only those cases are run (in suite order).
+    """
     run_repo = _runs()
     try:
-        cases = _test_cases().get_by_suite(suite_id, account_id)
+        all_cases = _test_cases().get_by_suite(suite_id, account_id)
+
+        if case_ids:
+            id_set = set(case_ids)
+            cases = [c for c in all_cases if c["_id"] in id_set]
+        else:
+            cases = all_cases
+
         if not cases:
-            run_repo.mark_failed(run_id, "Suite has no test cases")
+            run_repo.mark_failed(run_id, "No cases to execute")
             return
 
-        _execute_cases(run_id, account_id, model, cases)
-        run_repo.mark_completed(run_id)
+        final_status = _execute_cases(run_id, account_id, model, cases)
+
+        if final_status == RunRepository.STATUS_STOPPED:
+            run_repo.mark_stopped(run_id)
+        else:
+            run_repo.mark_completed(run_id)
 
     except Exception as exc:
         error_msg = f"{exc}\n{traceback.format_exc()}"
@@ -119,11 +143,7 @@ def run_suite(self, run_id: str, suite_id: str, account_id: str, model: str):
         raise
 
 
-@celery_app.task(
-    bind=True,
-    name="jobs.run_case",
-    max_retries=0,
-)
+@celery_app.task(bind=True, name="jobs.run_case", max_retries=0)
 def run_case(self, run_id: str, case_id: str, account_id: str, model: str):
     """Execute a single test case."""
     run_repo = _runs()
@@ -133,8 +153,12 @@ def run_case(self, run_id: str, case_id: str, account_id: str, model: str):
             run_repo.mark_failed(run_id, f"Case {case_id} not found")
             return
 
-        _execute_cases(run_id, account_id, model, [case])
-        run_repo.mark_completed(run_id)
+        final_status = _execute_cases(run_id, account_id, model, [case])
+
+        if final_status == RunRepository.STATUS_STOPPED:
+            run_repo.mark_stopped(run_id)
+        else:
+            run_repo.mark_completed(run_id)
 
     except Exception as exc:
         error_msg = f"{exc}\n{traceback.format_exc()}"

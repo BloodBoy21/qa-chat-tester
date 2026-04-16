@@ -35,22 +35,30 @@ def _serialize_run(run: dict) -> dict:
     return run
 
 
+def _get_or_404(run_id: str, account_id: str) -> dict:
+    run = _runs().get(run_id, account_id)
+    if not run:
+        raise HTTPException(status_code=404, detail="Run not found")
+    return run
+
+
 # ── schemas ───────────────────────────────────────────────────────────────────
 
 class RunSuiteRequest(BaseModel):
     model: str | None = None
+    case_ids: list[str] | None = None   # None = run all cases in suite
 
 
 class RunCaseRequest(BaseModel):
     model: str | None = None
 
 
-# ── endpoints ─────────────────────────────────────────────────────────────────
+# ── list / detail ─────────────────────────────────────────────────────────────
 
 @router.get("")
 async def list_runs(
     account_id: str = Depends(get_account_id),
-    suite_id: str = Query(None, description="Filter by suite"),
+    suite_id: str = Query(None),
     limit: int = Query(50, ge=1, le=200),
 ):
     runs = _runs().get_all(account_id, limit=limit, suite_id=suite_id)
@@ -59,11 +67,10 @@ async def list_runs(
 
 @router.get("/{run_id}")
 async def get_run(run_id: str, account_id: str = Depends(get_account_id)):
-    run = _runs().get(run_id, account_id)
-    if not run:
-        raise HTTPException(status_code=404, detail="Run not found")
-    return _serialize_run(run)
+    return _serialize_run(_get_or_404(run_id, account_id))
 
+
+# ── trigger ───────────────────────────────────────────────────────────────────
 
 @router.post("/suite/{suite_id}", status_code=202)
 async def trigger_suite_run(
@@ -71,36 +78,52 @@ async def trigger_suite_run(
     body: RunSuiteRequest = RunSuiteRequest(),
     account_id: str = Depends(get_account_id),
 ):
-    """Queue execution of all cases in a test suite."""
-    # Validate suite exists and has cases
+    """
+    Queue execution of cases in a test suite.
+    Pass `case_ids` in the body to run only a specific selection.
+    """
     suite = _suites().get(suite_id, account_id)
     if not suite:
         raise HTTPException(status_code=404, detail="Suite not found")
 
-    total = _cases().count_by_suite(suite_id, account_id)
-    if total == 0:
-        raise HTTPException(status_code=400, detail="Suite has no test cases")
+    case_repo = _cases()
+
+    if body.case_ids:
+        # Validate every requested case belongs to this suite & account
+        all_cases = case_repo.get_by_suite(suite_id, account_id)
+        valid_ids = {c["_id"] for c in all_cases}
+        requested = [cid for cid in body.case_ids if cid in valid_ids]
+        if not requested:
+            raise HTTPException(status_code=400, detail="None of the requested cases belong to this suite")
+        total = len(requested)
+        run_type = "selection"
+    else:
+        total = case_repo.count_by_suite(suite_id, account_id)
+        if total == 0:
+            raise HTTPException(status_code=400, detail="Suite has no test cases")
+        requested = None
+        run_type = "suite"
 
     model = body.model or DEFAULT_MODEL
     run_id = str(uuid.uuid4())
 
-    # Persist the run record before dispatching so the caller can poll immediately
     _runs().create(
         run_id=run_id,
         account_id=account_id,
-        run_type="suite",
+        run_type=run_type,
         total_cases=total,
         model=model,
         suite_id=suite_id,
+        case_ids=requested,
     )
 
-    # Dispatch Celery task — import here to avoid circular imports at startup
     from celery_queue.jobs.tasks import run_suite
     run_suite.delay(
         run_id=run_id,
         suite_id=suite_id,
         account_id=account_id,
         model=model,
+        case_ids=requested,
     )
 
     return {
@@ -109,6 +132,7 @@ async def trigger_suite_run(
         "total_cases": total,
         "suite_id": suite_id,
         "model": model,
+        "case_ids": requested,
     }
 
 
@@ -137,17 +161,35 @@ async def trigger_case_run(
     )
 
     from celery_queue.jobs.tasks import run_case
-    run_case.delay(
-        run_id=run_id,
-        case_id=case_id,
-        account_id=account_id,
-        model=model,
-    )
+    run_case.delay(run_id=run_id, case_id=case_id, account_id=account_id, model=model)
 
-    return {
-        "run_id": run_id,
-        "status": "pending",
-        "total_cases": 1,
-        "case_id": case_id,
-        "model": model,
-    }
+    return {"run_id": run_id, "status": "pending", "total_cases": 1, "case_id": case_id, "model": model}
+
+
+# ── control ───────────────────────────────────────────────────────────────────
+
+@router.post("/{run_id}/pause")
+async def pause_run(run_id: str, account_id: str = Depends(get_account_id)):
+    run = _get_or_404(run_id, account_id)
+    if run["status"] != RunRepository.STATUS_RUNNING:
+        raise HTTPException(status_code=409, detail=f"Run is '{run['status']}', not running")
+    _runs().mark_paused(run_id)
+    return {"ok": True, "status": RunRepository.STATUS_PAUSED}
+
+
+@router.post("/{run_id}/resume")
+async def resume_run(run_id: str, account_id: str = Depends(get_account_id)):
+    run = _get_or_404(run_id, account_id)
+    if run["status"] != RunRepository.STATUS_PAUSED:
+        raise HTTPException(status_code=409, detail=f"Run is '{run['status']}', not paused")
+    _runs().mark_resumed(run_id)
+    return {"ok": True, "status": RunRepository.STATUS_RUNNING}
+
+
+@router.post("/{run_id}/stop")
+async def stop_run(run_id: str, account_id: str = Depends(get_account_id)):
+    run = _get_or_404(run_id, account_id)
+    if run["status"] not in RunRepository.CONTROLLABLE:
+        raise HTTPException(status_code=409, detail=f"Run is already '{run['status']}'")
+    _runs().mark_stopped(run_id)
+    return {"ok": True, "status": RunRepository.STATUS_STOPPED}

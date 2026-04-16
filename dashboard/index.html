@@ -532,7 +532,12 @@ pre.raw-pre{font-family:'JetBrains Mono','Fira Code',monospace;font-size:11.5px;
                 ↑ Subir JSON
                 <input type="file" accept=".json" class="hidden" @change="onUploadCases($event)"/>
               </label>
-              <button @click="triggerSuiteRun(currentSuite._id)" class="btn btn-success" style="font-size:12px">▶ Ejecutar suite</button>
+              <button v-if="selectedCases.length"
+                @click="triggerSelectedRun"
+                class="btn btn-success" style="font-size:12px">
+                ▶ Ejecutar seleccionados ({{ selectedCases.length }})
+              </button>
+              <button @click="triggerSuiteRun(currentSuite._id)" class="btn btn-success" style="font-size:12px;opacity:.85">▶ Ejecutar todos</button>
             </div>
           </div>
           <div style="background:#1a1d27;border:1px solid #2e3250;border-radius:10px;overflow:hidden">
@@ -667,28 +672,44 @@ pre.raw-pre{font-family:'JetBrains Mono','Fira Code',monospace;font-size:11.5px;
           </div>
           <div v-else>
             <div v-for="r in runs" :key="r.run_id"
-              @click="openRunDetail(r)"
-              style="padding:13px 18px;border-top:1px solid #2e3250;display:flex;align-items:center;gap:12px;cursor:pointer;transition:.15s"
+              style="padding:12px 18px;border-top:1px solid #2e3250;display:flex;align-items:center;gap:12px;transition:.15s"
               @mouseover="e=>e.currentTarget.style.background='#22263a'"
               @mouseleave="e=>e.currentTarget.style.background='transparent'">
-              <div :class="['pulse-dot', r.status]" :style="`width:8px;height:8px;border-radius:50%;flex-shrink:0;background:${r.status==='completed'?'#4ade80':r.status==='failed'?'#f87171':r.status==='running'?'#6c63ff':'#7c85a2'}`"></div>
-              <div style="flex:1;min-width:0">
+              <!-- status dot -->
+              <div :style="`width:8px;height:8px;border-radius:50%;flex-shrink:0;background:${runDotColor(r.status)};${r.status==='running'?'animation:pulse-dot 1.3s infinite':''}`"></div>
+              <!-- info — clickable for detail -->
+              <div style="flex:1;min-width:0;cursor:pointer" @click="openRunDetail(r)">
                 <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;flex-wrap:wrap">
                   <span style="font-family:monospace;font-size:11px;color:#7c85a2">{{ (r.run_id||'').slice(0,16) }}…</span>
-                  <span :class="['chip', r.status==='completed'?'chip-green':r.status==='failed'?'chip-red':r.status==='running'?'chip-purple':'chip-gray']">{{ {pending:'Pendiente',running:'Corriendo',completed:'Completado',failed:'Fallido'}[r.status]||r.status }}</span>
+                  <span :class="['chip', runChipClass(r.status)]">{{ RUN_LABELS[r.status] || r.status }}</span>
                   <span class="chip chip-gray" style="font-size:10px">{{ r.type }}</span>
                   <span style="font-size:11px;color:#7c85a2">{{ r.model }}</span>
+                  <span v-if="r.case_ids" style="font-size:10px;color:#7c85a2">{{ r.case_ids.length }} casos selec.</span>
                 </div>
                 <div style="display:flex;align-items:center;gap:8px">
                   <div style="flex:1;background:#22263a;border-radius:99px;height:5px;overflow:hidden">
-                    <div :style="`width:${r.total_cases?Math.round(r.completed_cases/r.total_cases*100):0}%;height:100%;border-radius:99px;background:${r.status==='completed'?'#4ade80':r.status==='failed'?'#f87171':'#6c63ff'};transition:.4s`"></div>
+                    <div :style="`width:${r.total_cases?Math.round(r.completed_cases/r.total_cases*100):0}%;height:100%;border-radius:99px;background:${r.status==='completed'?'#4ade80':r.status==='failed'||r.status==='stopped'?'#f87171':'#6c63ff'};transition:.4s`"></div>
                   </div>
                   <span style="font-size:11px;color:#7c85a2;flex-shrink:0">{{ r.completed_cases }}/{{ r.total_cases }}</span>
                   <span v-if="r.failed_cases>0" style="font-size:11px;color:#f87171">{{ r.failed_cases }} fallidos</span>
                 </div>
               </div>
-              <div style="text-align:right;flex-shrink:0">
-                <div style="font-size:11px;color:#7c85a2">{{ fmtDate(r.created_at) }}</div>
+              <!-- control buttons -->
+              <div style="display:flex;gap:6px;flex-shrink:0;align-items:center">
+                <template v-if="r.status==='running'">
+                  <button @click.stop="controlRun(r.run_id,'pause')" class="btn btn-ghost" style="font-size:11px;padding:4px 10px" title="Pausar">⏸ Pausar</button>
+                  <button @click.stop="controlRun(r.run_id,'stop')" class="btn btn-danger" style="font-size:11px;padding:4px 9px" title="Detener">■ Detener</button>
+                </template>
+                <template v-else-if="r.status==='paused'">
+                  <button @click.stop="controlRun(r.run_id,'resume')" class="btn btn-success" style="font-size:11px;padding:4px 10px" title="Continuar">▶ Continuar</button>
+                  <button @click.stop="controlRun(r.run_id,'stop')" class="btn btn-danger" style="font-size:11px;padding:4px 9px" title="Detener">■ Detener</button>
+                </template>
+                <template v-else-if="r.status==='pending'">
+                  <button @click.stop="controlRun(r.run_id,'stop')" class="btn btn-ghost" style="font-size:11px;padding:4px 9px" title="Cancelar">✕</button>
+                </template>
+                <div style="text-align:right">
+                  <div style="font-size:11px;color:#7c85a2">{{ fmtDate(r.created_at) }}</div>
+                </div>
               </div>
             </div>
           </div>
@@ -806,14 +827,25 @@ pre.raw-pre{font-family:'JetBrains Mono','Fira Code',monospace;font-size:11.5px;
     <div class="modal-box" style="max-width:520px;max-height:88vh">
       <div class="modal-head">
         <h3>Detalle de ejecución</h3>
-        <button @click="runModal.show=false" class="btn btn-ghost" style="padding:4px 10px">✕</button>
+        <div style="display:flex;gap:6px;align-items:center">
+          <!-- inline control from modal -->
+          <template v-if="runModal.data?.status==='running'">
+            <button @click="controlRun(runModal.data.run_id,'pause')" class="btn btn-ghost" style="font-size:11px;padding:4px 10px">⏸ Pausar</button>
+            <button @click="controlRun(runModal.data.run_id,'stop')" class="btn btn-danger" style="font-size:11px;padding:4px 9px">■ Detener</button>
+          </template>
+          <template v-else-if="runModal.data?.status==='paused'">
+            <button @click="controlRun(runModal.data.run_id,'resume')" class="btn btn-success" style="font-size:11px;padding:4px 10px">▶ Continuar</button>
+            <button @click="controlRun(runModal.data.run_id,'stop')" class="btn btn-danger" style="font-size:11px;padding:4px 9px">■ Detener</button>
+          </template>
+          <button @click="runModal.show=false" class="btn btn-ghost" style="padding:4px 10px">✕</button>
+        </div>
       </div>
       <div style="padding:20px;overflow-y:auto;flex:1;display:flex;flex-direction:column;gap:14px">
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
           <div style="background:#22263a;border-radius:8px;padding:12px">
             <div style="font-size:10px;color:#7c85a2;text-transform:uppercase;margin-bottom:6px">Estado</div>
-            <span :class="['chip', runModal.data?.status==='completed'?'chip-green':runModal.data?.status==='failed'?'chip-red':runModal.data?.status==='running'?'chip-purple':'chip-gray']">
-              {{ {pending:'Pendiente',running:'Corriendo',completed:'Completado',failed:'Fallido'}[runModal.data?.status]||'–' }}
+            <span :class="['chip', runChipClass(runModal.data?.status)]">
+              {{ RUN_LABELS[runModal.data?.status] || '–' }}
             </span>
           </div>
           <div style="background:#22263a;border-radius:8px;padding:12px">
@@ -1019,6 +1051,10 @@ createApp({
       runsFilter: { suite_id: '' },
       activeRuns: 0,
       runModal: { show: false, data: null },
+      RUN_LABELS: {
+        pending: 'Pendiente', running: 'Corriendo', paused: 'Pausado',
+        stopped: 'Detenido', completed: 'Completado', failed: 'Fallido',
+      },
 
       // ── Accounts ──
       accounts: [],
@@ -1640,21 +1676,50 @@ createApp({
       try {
         const path = this.runsFilter.suite_id ? `/runs?suite_id=${this.runsFilter.suite_id}` : '/runs';
         this.runs = await this.api('GET', path);
-        this.activeRuns = this.runs.filter(r => r.status === 'running' || r.status === 'pending').length;
+        this.activeRuns = this.runs.filter(r => ['running','pending','paused'].includes(r.status)).length;
+        // keep modal data fresh
+        if (this.runModal.show && this.runModal.data) {
+          const fresh = this.runs.find(r => r.run_id === this.runModal.data.run_id);
+          if (fresh) this.runModal.data = fresh;
+        }
       } finally { this.loading = { ...this.loading, runs: false }; }
     },
     startRunsPoll() {
       this._runsPollTimer = setInterval(() => {
-        if (this.activeRuns > 0) this.loadRuns();
+        if (this.activeRuns > 0 || this.runModal.show) this.loadRuns();
       }, 4000);
     },
     openRunDetail(r) {
       this.runModal = { show: true, data: r };
     },
+    // ── Run helpers ──
+    runDotColor(status) {
+      return { running:'#6c63ff', paused:'#fbbf24', completed:'#4ade80', failed:'#f87171', stopped:'#f87171', pending:'#7c85a2' }[status] || '#7c85a2';
+    },
+    runChipClass(status) {
+      return { running:'chip-purple', paused:'chip-orange', completed:'chip-green', failed:'chip-red', stopped:'chip-red', pending:'chip-gray' }[status] || 'chip-gray';
+    },
+    async controlRun(runId, action) {
+      try {
+        await this.api('POST', `/runs/${runId}/${action}`, {});
+        const labels = { pause:'Pausado', resume:'Continuando', stop:'Detenido' };
+        this.showGlobalToast(`Run ${labels[action] || action}`, 'success');
+        await this.loadRuns();
+      } catch(_) {}
+    },
     async triggerSuiteRun(suiteId) {
       try {
         const res = await this.api('POST', `/runs/suite/${suiteId}`, {});
         this.showGlobalToast(`Run iniciado: ${res.run_id?.slice(0,12)}…`, 'success');
+        this.navigate('runs');
+      } catch(_) {}
+    },
+    async triggerSelectedRun() {
+      if (!this.currentSuite || !this.selectedCases.length) return;
+      try {
+        const res = await this.api('POST', `/runs/suite/${this.currentSuite._id}`, { case_ids: this.selectedCases });
+        this.showGlobalToast(`Run iniciado con ${this.selectedCases.length} casos: ${res.run_id?.slice(0,12)}…`, 'success');
+        this.selectedCases = [];
         this.navigate('runs');
       } catch(_) {}
     },
