@@ -1,3 +1,4 @@
+from bson.codec_options import DEFAULT
 import os
 import json
 import asyncio
@@ -15,6 +16,8 @@ REQUEST_TIMEOUT = int(os.getenv("REQUEST_TIMEOUT", "120"))
 _TOKEN = os.getenv("AGENT_TOKEN", "")
 
 _http_executor = concurrent.futures.ThreadPoolExecutor(max_workers=20)
+
+DEFAULT_ACCOUNT_ID = os.getenv("DEFAULT_ACCOUNT_ID", "default_account")
 
 
 def clean_response(response_dict: dict) -> dict:
@@ -49,7 +52,7 @@ def send_to_agent(
     attachments: list = None,
     campaigns: list = None,
     bot_message: str = "",
-    account_id: str = "3057",
+    account_id: str = DEFAULT_ACCOUNT_ID,
     session_id: str = "",
     session_backend: str = "redis",
     persist_session: bool = True,
