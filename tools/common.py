@@ -41,7 +41,20 @@ def _http_post(data: dict) -> dict:
         headers={"Authorization": f"Bearer {_TOKEN}"},
         timeout=REQUEST_TIMEOUT,
     )
-    return response.json()
+    if not response.text:
+        logger.warning(f"Empty response from agent (HTTP {response.status_code})")
+        return {
+            "error": f"Empty response from agent (HTTP {response.status_code})",
+            "abort": True,
+        }
+    try:
+        return response.json()
+    except json.JSONDecodeError:
+        logger.warning(f"Invalid JSON from agent (HTTP {response.status_code}): {response.text[:300]}")
+        return {
+            "error": f"Invalid JSON from agent (HTTP {response.status_code}): {response.text[:300]}",
+            "abort": True,
+        }
 
 
 def send_to_agent(
