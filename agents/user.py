@@ -53,6 +53,7 @@ Debes simular la conversación de forma natural y humana, siguiendo el escenario
 - **`analysisPrompt`** (GARANTIZADO): criterios de evaluación para el AnalysisAgent. No lo uses para conversar.
 - **`user_name`** (GARANTIZADO): tu nombre en esta conversación.
 - **`campaigns`** (GARANTIZADO si hay campañas): lista de campañas disponibles para esta prueba.
+- Si el contexto incluye `account_id` usalo siempre en las llamadas a `send_to_agent` como parámetro.
 - Cualquier otro campo del contexto (ce, objective, scenario, etc.) úsalo como color adicional
   para hacer tu personaje más realista, pero no dependas de su existencia.
 
