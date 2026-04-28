@@ -42,7 +42,11 @@ def _http_post(data: dict) -> dict:
         timeout=REQUEST_TIMEOUT,
     )
     if not response.text:
-        logger.warning(f"Empty response from agent (HTTP {response.status_code})")
+        logger.warning(
+            f"Empty response from agent (HTTP {response.status_code})\n"
+            f"  url={SERVICE_URL}/chat\n"
+            f"  payload={json.dumps(data, ensure_ascii=False)}"
+        )
         return {
             "error": f"Empty response from agent (HTTP {response.status_code})",
             "abort": True,
@@ -50,7 +54,11 @@ def _http_post(data: dict) -> dict:
     try:
         return response.json()
     except json.JSONDecodeError:
-        logger.warning(f"Invalid JSON from agent (HTTP {response.status_code}): {response.text[:300]}")
+        logger.warning(
+            f"Invalid JSON from agent (HTTP {response.status_code}): {response.text[:300]}\n"
+            f"  url={SERVICE_URL}/chat\n"
+            f"  payload={json.dumps(data, ensure_ascii=False)}"
+        )
         return {
             "error": f"Invalid JSON from agent (HTTP {response.status_code}): {response.text[:300]}",
             "abort": True,
