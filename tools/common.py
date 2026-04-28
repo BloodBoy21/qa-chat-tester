@@ -1,4 +1,3 @@
-from bson.codec_options import DEFAULT
 import os
 import json
 import asyncio
